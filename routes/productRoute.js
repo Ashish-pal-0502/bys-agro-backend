@@ -32,6 +32,7 @@ const {
   getFeaturedProducts,
   activeProduct,
   getProductReviewsByGroupId,
+  getRelatedProductsByCategory,
 } = require("../controllers/productController");
 
 const router = express.Router();
@@ -71,5 +72,6 @@ router.get("/get-product-reviews-by-group-id", getProductReviewsByGroupId);
 router.route("/get-product-by-visual-id").get(getProductByVisualId);
 router.post("/get-related", getRelatedProductsByConcerns);
 router.post("/check-product-purchase", hasPurchasedProduct);
+router.post("/get-related-by-category", getRelatedProductsByCategory);
 
 module.exports = router;

@@ -1414,6 +1414,36 @@ const getRelatedProductsByConcerns = asyncHandler(async (req, res) => {
   });
 });
 
+const getRelatedProductsByCategory = asyncHandler(async (req, res) => {
+  const { category, excludeProductId } = req.body;
+
+  if (!category) {
+    return res.status(200).json({
+      message: "No category provided",
+      products: [],
+    });
+  }
+
+  const filter = {
+    isActive: true,
+    category: category,
+  };
+
+  if (excludeProductId) {
+    filter._id = { $ne: excludeProductId };
+  }
+
+  const products = await Product.find(filter)
+    .limit(10)
+    .populate("category")
+    .populate("countInStock");
+
+  res.status(200).json({
+    message: "Related products retrieved successfully",
+    products,
+  });
+});
+
 // const getProductReviews = asyncHandler(async (req, res) => {
 //   const { productId, pageNumber = 1, pageSize = 20 } = req.query
 
@@ -1622,4 +1652,5 @@ module.exports = {
   getInactiveProducts,
   getFeaturedProducts,
   activeProduct,
+  getRelatedProductsByCategory
 };

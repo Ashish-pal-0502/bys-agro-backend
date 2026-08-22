@@ -410,7 +410,7 @@ const resendOTP = asyncHandler(async (req, res) => {
 
 
   user.otp = otp.toString();
-  use.otpExpiresAt = otpExpiresAt;
+  user.otpExpiresAt = otpExpiresAt;
   await user.save();
 
   return res.status(200).send({
