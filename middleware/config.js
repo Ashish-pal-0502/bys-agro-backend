@@ -19,9 +19,8 @@ const whitelist = ['http://localhost:5000', 'http://localhost:5173', 'http://loc
   'https://motherland-admin-panel-a16u.vercel.app',
   'http://motherland-admin-panel.s3-website.ap-south-1.amazonaws.com',
   'https://motherland-admin-panel.s3-website.ap-south-1.amazonaws.com',
-  'https://motherlandpure.com',
-  'https://www.motherlandpure.com',
-  'https://admin.motherlandpure.com',
+  'https://bys-agro-frontend.onrender.com',
+
 
 ]
 
