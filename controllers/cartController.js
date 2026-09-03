@@ -295,6 +295,58 @@ const clearCartInternally = asyncHandler(async (userId) => {
 
 });
 
+// const addLinkedItemToCart = asyncHandler(async (req, res) => {
+//   const { userId, linkedProductId, parentProductId, linkedOfferId, quantity = 1 } = req.body;
+  
+//   const offer = await LinkedOffer.findOne({
+//     _id: linkedOfferId,
+//     parentProduct: parentProductId,
+//     linkedProduct: linkedProductId,
+//     isActive: true,
+//   });
+
+//   if (!offer) {
+//     return res.status(400).json({ message: "Linked offer is not valid or has expired." });
+//   }
+
+//   // Verify parent product is actually in this user's cart
+//   const parentInCart = await Cart.findOne({
+//     user: userId,
+//     product: parentProductId
+//   });
+
+//   if (!parentInCart) {
+//     return res.status(400).json({ message: "You're almost there! Add the required product to your cart to use this offer." });
+//   }
+
+//   // Check if this exact linked item (via this offer) already exists
+//   const existingLinkedItem = await Cart.findOne({
+//     user: userId,
+//     product: linkedProductId,
+//     "linkedVia.linkedOfferId": linkedOfferId
+//   });
+
+//   if (existingLinkedItem) {
+//     existingLinkedItem.quantity += quantity;
+//     await existingLinkedItem.save();
+//     return res.status(200).json({ message: "Cart updated", cartItem: existingLinkedItem });
+//   }
+
+//   // Create a new cart item WITH linkedVia set
+//   const cartItem = await Cart.create({
+//     user: userId,
+//     product: linkedProductId,
+//     quantity,
+//     linkedVia: {
+//       parentProductId,
+//       linkedOfferId
+//     }
+//   });
+
+//   return res.status(201).json({ message: "Cart updated", cartItem });
+// });
+
+
 const addLinkedItemToCart = asyncHandler(async (req, res) => {
   const { userId, linkedProductId, parentProductId, linkedOfferId, quantity = 1 } = req.body;
   
@@ -309,7 +361,6 @@ const addLinkedItemToCart = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Linked offer is not valid or has expired." });
   }
 
-  // Verify parent product is actually in this user's cart
   const parentInCart = await Cart.findOne({
     user: userId,
     product: parentProductId
@@ -319,20 +370,33 @@ const addLinkedItemToCart = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "You're almost there! Add the required product to your cart to use this offer." });
   }
 
-  // Check if this exact linked item (via this offer) already exists
-  const existingLinkedItem = await Cart.findOne({
+  // ✅ Check if product exists in cart (any variant)
+  const existingItem = await Cart.findOne({
     user: userId,
-    product: linkedProductId,
-    "linkedVia.linkedOfferId": linkedOfferId
+    product: linkedProductId
   });
 
-  if (existingLinkedItem) {
-    existingLinkedItem.quantity += quantity;
-    await existingLinkedItem.save();
-    return res.status(200).json({ message: "Cart updated", cartItem: existingLinkedItem });
+  if (existingItem) {
+    // ✅ Update quantity
+    existingItem.quantity += quantity;
+    
+    // ✅ Track that this was added via offer (if not already tracked)
+    if (!existingItem.linkedVia) {
+      existingItem.linkedVia = {};
+    }
+    if (!existingItem.linkedVia.linkedOfferId) {
+      existingItem.linkedVia.parentProductId = parentProductId;
+      existingItem.linkedVia.linkedOfferId = linkedOfferId;
+    }
+    
+    await existingItem.save();
+    return res.status(200).json({ 
+      message: "Cart updated", 
+      cartItem: existingItem,
+      wasExisting: true 
+    });
   }
 
-  // Create a new cart item WITH linkedVia set
   const cartItem = await Cart.create({
     user: userId,
     product: linkedProductId,
@@ -343,8 +407,13 @@ const addLinkedItemToCart = asyncHandler(async (req, res) => {
     }
   });
 
-  return res.status(201).json({ message: "Cart updated", cartItem });
+  return res.status(201).json({ 
+    message: "Cart updated", 
+    cartItem,
+    wasExisting: false 
+  });
 });
+
 
 const applyLinkedDiscountsToCart = asyncHandler(async (req, res) => {
   const { userId } = req.body;
