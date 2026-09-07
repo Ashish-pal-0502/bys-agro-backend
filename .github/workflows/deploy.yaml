@@ -1,0 +1,472 @@
+name: Build and Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================================
+      # 1. Checkout repository
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ============================================================
+      # 2. Configure AWS credentials
+      # ============================================================
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+
+      # ============================================================
+      # 3. Login to Amazon ECR
+      # ============================================================
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password \
+            --region ap-south-1 | \
+          docker login \
+            --username AWS \
+            --password-stdin \
+            599034577607.dkr.ecr.ap-south-1.amazonaws.com
+
+
+      # ============================================================
+      # 4. Build Docker image
+      # ============================================================
+      - name: Build Docker image
+        run: |
+          docker build -t bys-agro-backend .
+
+
+      # ============================================================
+      # 5. Tag Docker image
+      # ============================================================
+      - name: Tag Docker image
+        run: |
+          docker tag \
+            bys-agro-backend:latest \
+            599034577607.dkr.ecr.ap-south-1.amazonaws.com/bys-agro-backend:latest
+
+
+      # ============================================================
+      # 6. Push Docker image to ECR
+      # ============================================================
+      - name: Push image to ECR
+        run: |
+          docker push \
+            599034577607.dkr.ecr.ap-south-1.amazonaws.com/bys-agro-backend:latest
+
+
+      # ============================================================
+      # 7. Remove untagged images from ECR
+      # ============================================================
+      - name: Remove untagged images from ECR
+        run: |
+          IMAGE_REPO="bys-agro-backend"
+          REGION="ap-south-1"
+
+          IMAGE_DIGESTS=$(aws ecr list-images \
+            --repository-name "$IMAGE_REPO" \
+            --filter tagStatus=UNTAGGED \
+            --region "$REGION" \
+            --query 'imageIds[*].imageDigest' \
+            --output text)
+
+          for digest in $IMAGE_DIGESTS; do
+            echo "Deleting untagged image: $digest"
+
+            aws ecr batch-delete-image \
+              --repository-name "$IMAGE_REPO" \
+              --image-ids imageDigest=$digest \
+              --region "$REGION"
+          done
+
+
+      # ============================================================
+      # 8. Deploy on EC2 via SSH
+      # ============================================================
+      - name: Deploy on EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.0
+
+        env:
+
+          # ========================================================
+          # Application
+          # ========================================================
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          NODE_ENV: production
+
+          # ========================================================
+          # AWS / S3
+          # ========================================================
+          AWS_BUCKET: ${{ secrets.AWS_BUCKET }}
+          AWS_BUCKET_REGION: ${{ secrets.AWS_BUCKET_REGION }}
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          # ========================================================
+          # Application Authentication
+          # ========================================================
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+
+          # ========================================================
+          # User / SMTP Email
+          # ========================================================
+          USER_EMAIL: ${{ secrets.USER_EMAIL }}
+          USER_PASS: ${{ secrets.USER_PASS }}
+
+          SUPPORT_EMAIL: ${{ secrets.SUPPORT_EMAIL }}
+          SUPPORT_PASS: ${{ secrets.SUPPORT_PASS }}
+
+          ORDER_EMAIL: ${{ secrets.ORDER_EMAIL }}
+          ORDER_PASS: ${{ secrets.ORDER_PASS }}
+
+          CART_EMAIL: ${{ secrets.CART_EMAIL }}
+          CART_PASS: ${{ secrets.CART_PASS }}
+
+          VERIFY_EMAIL: ${{ secrets.VERIFY_EMAIL }}
+          VERIFY_PASS: ${{ secrets.VERIFY_PASS }}
+
+          HELP_EMAIL: ${{ secrets.HELP_EMAIL }}
+          HELP_PASS: ${{ secrets.HELP_PASS }}
+
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+
+          # ========================================================
+          # Shiprocket
+          # ========================================================
+          SHIPROCKET_API_EMAIL: ${{ secrets.SHIPROCKET_API_EMAIL }}
+          SHIPROCKET_API_PASS: ${{ secrets.SHIPROCKET_API_PASS }}
+
+          # ========================================================
+          # Razorpay
+          # ========================================================
+          RAZOR_PAY_ID: ${{ secrets.RAZOR_PAY_ID }}
+          RAZOR_PAY_SECRET: ${{ secrets.RAZOR_PAY_SECRET }}
+
+          # ========================================================
+          # Fast2SMS
+          # ========================================================
+          FAST2SMS_API_KEY: ${{ secrets.FAST2SMS_API_KEY }}
+
+          # ========================================================
+          # WhatsApp
+          # ========================================================
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+
+
+        with:
+
+          # ========================================================
+          # EC2 connection
+          # ========================================================
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          # ========================================================
+          # Environment variables passed to SSH session
+          # ========================================================
+          envs: >-
+            MONGO_URL,
+            MONGO_URI,
+            NODE_ENV,
+            AWS_BUCKET,
+            AWS_BUCKET_REGION,
+            AWS_ACCESS_KEY,
+            AWS_SECRET_KEY,
+            AWS_ACCESS_KEY_ID,
+            AWS_SECRET_ACCESS_KEY,
+            SECRET_KEY,
+            USER_EMAIL,
+            USER_PASS,
+            SUPPORT_EMAIL,
+            SUPPORT_PASS,
+            ORDER_EMAIL,
+            ORDER_PASS,
+            CART_EMAIL,
+            CART_PASS,
+            VERIFY_EMAIL,
+            VERIFY_PASS,
+            HELP_EMAIL,
+            HELP_PASS,
+            SMTP_HOST,
+            SMTP_PORT,
+            SMTP_SECURE,
+            SHIPROCKET_API_EMAIL,
+            SHIPROCKET_API_PASS,
+            RAZOR_PAY_ID,
+            RAZOR_PAY_SECRET,
+            FAST2SMS_API_KEY,
+            WHATSAPP_ACCESS_TOKEN,
+            WHATSAPP_PHONE_NUMBER_ID
+
+
+          # ========================================================
+          # Deployment script
+          # ========================================================
+          script: |
+
+            # ======================================================
+            # Stop old container
+            # ======================================================
+
+            sudo docker stop bys-agro-backend || true
+
+            sudo docker rm bys-agro-backend || true
+
+
+            # ======================================================
+            # Remove old BYS Agro image
+            # ======================================================
+
+            sudo docker rmi \
+              599034577607.dkr.ecr.ap-south-1.amazonaws.com/bys-agro-backend:latest \
+              || true
+
+
+            # ======================================================
+            # Create temporary production .env
+            # ======================================================
+
+            sudo rm -f .env
+
+
+            # Application
+            echo "PORT=5000" | sudo tee .env > /dev/null
+            echo "NODE_ENV=$NODE_ENV" | sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # MongoDB
+            # ======================================================
+
+            echo "MONGO_URL=$MONGO_URL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "MONGO_URI=$MONGO_URI" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # AWS / S3
+            # ======================================================
+
+            echo "AWS_BUCKET=$AWS_BUCKET" | \
+              sudo tee -a .env > /dev/null
+
+            echo "AWS_BUCKET_REGION=$AWS_BUCKET_REGION" | \
+              sudo tee -a .env > /dev/null
+
+            echo "AWS_ACCESS_KEY=$AWS_ACCESS_KEY" | \
+              sudo tee -a .env > /dev/null
+
+            echo "AWS_SECRET_KEY=$AWS_SECRET_KEY" | \
+              sudo tee -a .env > /dev/null
+
+            echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" | \
+              sudo tee -a .env > /dev/null
+
+            echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Application authentication
+            # ======================================================
+
+            echo "SECRET_KEY=$SECRET_KEY" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # User email
+            # ======================================================
+
+            echo "USER_EMAIL=$USER_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "USER_PASS=$USER_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Shiprocket
+            # ======================================================
+
+            echo "SHIPROCKET_API_EMAIL=$SHIPROCKET_API_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "SHIPROCKET_API_PASS=$SHIPROCKET_API_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Razorpay
+            # ======================================================
+
+            echo "RAZOR_PAY_ID=$RAZOR_PAY_ID" | \
+              sudo tee -a .env > /dev/null
+
+            echo "RAZOR_PAY_SECRET=$RAZOR_PAY_SECRET" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Support Email
+            # ======================================================
+
+            echo "SUPPORT_EMAIL=$SUPPORT_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "SUPPORT_PASS=$SUPPORT_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Order Email
+            # ======================================================
+
+            echo "ORDER_EMAIL=$ORDER_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "ORDER_PASS=$ORDER_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Cart Email
+            # ======================================================
+
+            echo "CART_EMAIL=$CART_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "CART_PASS=$CART_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Verify Email
+            # ======================================================
+
+            echo "VERIFY_EMAIL=$VERIFY_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "VERIFY_PASS=$VERIFY_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Help Email
+            # ======================================================
+
+            echo "HELP_EMAIL=$HELP_EMAIL" | \
+              sudo tee -a .env > /dev/null
+
+            echo "HELP_PASS=$HELP_PASS" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # SMTP
+            # ======================================================
+
+            echo "SMTP_HOST=$SMTP_HOST" | \
+              sudo tee -a .env > /dev/null
+
+            echo "SMTP_PORT=$SMTP_PORT" | \
+              sudo tee -a .env > /dev/null
+
+            echo "SMTP_SECURE=$SMTP_SECURE" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Fast2SMS
+            # ======================================================
+
+            echo "FAST2SMS_API_KEY=$FAST2SMS_API_KEY" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # WhatsApp
+            # ======================================================
+
+            echo "WHATSAPP_ACCESS_TOKEN=$WHATSAPP_ACCESS_TOKEN" | \
+              sudo tee -a .env > /dev/null
+
+            echo "WHATSAPP_PHONE_NUMBER_ID=$WHATSAPP_PHONE_NUMBER_ID" | \
+              sudo tee -a .env > /dev/null
+
+
+            # ======================================================
+            # Login to Amazon ECR
+            # ======================================================
+
+            sudo aws ecr get-login-password \
+              --region ap-south-1 | \
+            sudo docker login \
+              --username AWS \
+              --password-stdin \
+              599034577607.dkr.ecr.ap-south-1.amazonaws.com
+
+
+            # ======================================================
+            # Pull latest image
+            # ======================================================
+
+            sudo docker pull \
+              599034577607.dkr.ecr.ap-south-1.amazonaws.com/bys-agro-backend:latest
+
+
+            # ======================================================
+            # Start new container
+            # ======================================================
+
+            sudo docker run -d \
+              --restart unless-stopped \
+              -p 5000:5000 \
+              --env-file .env \
+              --name bys-agro-backend \
+              599034577607.dkr.ecr.ap-south-1.amazonaws.com/bys-agro-backend:latest
+
+
+            # ======================================================
+            # Remove temporary .env from EC2
+            # ======================================================
+
+            sudo rm -f .env
+
+
+            # ======================================================
+            # Show container status
+            # ======================================================
+
+            sudo docker ps
+
+
+            # ======================================================
+            # Show last 30 log lines
+            # ======================================================
+
+            sudo docker logs --tail 30 bys-agro-backend
