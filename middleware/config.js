@@ -20,8 +20,7 @@ const whitelist = ['http://localhost:5000', 'http://localhost:5173', 'http://loc
   'http://motherland-admin-panel.s3-website.ap-south-1.amazonaws.com',
   'https://motherland-admin-panel.s3-website.ap-south-1.amazonaws.com',
   'https://bys-agro-frontend.onrender.com',
-
-
+  'http://bys-agro-panel.s3-website.ap-south-1.amazonaws.com',
 ]
 
 const corsOptions = {
