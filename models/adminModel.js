@@ -54,7 +54,11 @@ adminSchema.pre('save', async function(next) {
   }
   
   adminSchema.methods.generateAccessToken = async function() {
-    return await jwt.sign({ id: this._id, type: this.type, email: this.email, name: this.name }, process.env.SECRET_KEY)
+    return await jwt.sign(
+      { id: this._id, type: this.type, email: this.email, name: this.name, tokenType: 'access' },
+      process.env.SECRET_KEY,
+      { expiresIn: '8h' }
+    )
   }
   
 

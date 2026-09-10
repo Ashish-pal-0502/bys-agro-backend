@@ -5,11 +5,12 @@ const {
   getPincodes,
   deletePincode,
 } = require('../controllers/pincodeController')
+const { isAdmin } = require('../middleware/authMiddleware')
 
 const router = express.Router()
 
-router.post('/add', addPincode)
+router.post('/add', isAdmin, addPincode)
 router.get('/get', getPincodes)
-router.delete('/delete/:id', deletePincode)
+router.delete('/delete/:id', isAdmin, deletePincode)
 
 module.exports = router

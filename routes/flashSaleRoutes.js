@@ -1,5 +1,5 @@
 const express = require('express')
-const {  
+const {
     createFlashSale,
     getFlashSales,
     getActiveFlashSale,
@@ -8,14 +8,15 @@ const {
     getFlashSaleProducts,
     updateFlashSaleStatus
  } = require('../controllers/flashSaleController')
+const { isAdmin } = require('../middleware/authMiddleware')
 const router = express.Router()
 
-router.post('/create', createFlashSale)
-router.get('/get', getFlashSales)
+router.post('/create', isAdmin, createFlashSale)
+router.get('/get', isAdmin, getFlashSales)
 router.get('/get-active', getActiveFlashSale)
-router.delete('/delete', deleteFlashSale)
-router.post('/update', updateFlashSale)
+router.delete('/delete', isAdmin, deleteFlashSale)
+router.post('/update', isAdmin, updateFlashSale)
 router.get('/get-flash-products', getFlashSaleProducts)
-router.patch("/status", updateFlashSaleStatus);
+router.patch("/status", isAdmin, updateFlashSaleStatus);
 
 module.exports = router

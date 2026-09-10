@@ -2,24 +2,25 @@ const { checkServiceability, calculateShippingCost, createWarehouse, getWarehous
     createShiprocketOrderTest, generateAWB, cancelShiprocketOrder, cancelShiprocketAWBs, cancelShipmentByOrderId, requestPickupForOrder, calculateShippingForOrder, getServiceableCouriers
  } = require('../controllers/shiprocketService')
 const express = require('express')
+const { isAdmin, isUser } = require('../middleware/authMiddleware')
 
 const router = express.Router()
 
 router.post('/check-pincode', checkServiceability)
 router.post('/calculate-shipping-cost', calculateShippingCost)
-router.post('/calculate-shipping-cost-for-order', calculateShippingForOrder)
+router.post('/calculate-shipping-cost-for-order', isUser, calculateShippingForOrder)
 
-router.post('/create-warehouse', createWarehouse)
-router.get('/get-warehouses', getWarehouses)
-router.delete('/delete-warehouse', deleteWarehouse)
-router.post('/create-order-test', createShiprocketOrderTest)
+router.post('/create-warehouse', isAdmin, createWarehouse)
+router.get('/get-warehouses', isAdmin, getWarehouses)
+router.delete('/delete-warehouse', isAdmin, deleteWarehouse)
+router.post('/create-order-test', isAdmin, createShiprocketOrderTest)
 
-router.post('/generate-awb', generateAWB)
-router.post('/cancel-shiprocket-order', cancelShiprocketOrder)
-router.post('/cancel-order-through-awb', cancelShiprocketAWBs)
+router.post('/generate-awb', isAdmin, generateAWB)
+router.post('/cancel-shiprocket-order', isAdmin, cancelShiprocketOrder)
+router.post('/cancel-order-through-awb', isAdmin, cancelShiprocketAWBs)
 
-router.post('/cancel-shipment-by-order-id', cancelShipmentByOrderId)
-router.get('/request-pickup', requestPickupForOrder)
-router.post('/get-serviceable-couriers', getServiceableCouriers)
+router.post('/cancel-shipment-by-order-id', isAdmin, cancelShipmentByOrderId)
+router.get('/request-pickup', isAdmin, requestPickupForOrder)
+router.post('/get-serviceable-couriers', isAdmin, getServiceableCouriers)
 
 module.exports = router

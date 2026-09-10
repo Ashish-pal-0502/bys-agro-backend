@@ -1,8 +1,10 @@
 
 const User = require('../models/userModel')
+const Product = require('../models/productModel')
 const asyncHandler = require('express-async-handler');
 const { OAuth2Client } = require('google-auth-library')
 const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
 const {
   sendVerificationEmail,
   sendResetEmail,
@@ -10,6 +12,13 @@ const {
 } = require('../middleware/handleEmail');
 const { default: isEmail } = require('validator/lib/isEmail');
 const sendOTP = require('../services/smsService');
+const escapeRegex = require('../utils/escapeRegex');
+
+const generateOtp = (digits = 4) => {
+  const min = 10 ** (digits - 1);
+  const max = 10 ** digits - 1;
+  return crypto.randomInt(min, max + 1);
+};
 
 const createUser = asyncHandler(async (req, res) => {
   const { name, email, password, phone, profileImage, preferredLanguage, address, dob } = req.body;
@@ -27,7 +36,7 @@ const createUser = asyncHandler(async (req, res) => {
     });
   }
 
-  const otp = Math.floor(1000 + Math.random() * 9000);
+  const otp = generateOtp(4);
   sendVerificationEmail(otp, email)
 
   const newUser = await User.create({
@@ -77,15 +86,16 @@ const getUsers = asyncHandler(async (req, res) => {
 
 const searchUsers = asyncHandler(async (req, res) => {
   const { Query, pageNumber = 1, pageSize = 20 } = req.query;
+  const safeQuery = escapeRegex(Query || "");
 
   const filter = {
     isActive: true,
     isEmailVerified: true,
     $or: [
-      { firstName: { $regex: Query } },
-      { lastName: { $regex: Query } },
-      { email: { $regex: Query } },
-      { phone: { $regex: Query } }
+      { firstName: { $regex: safeQuery, $options: "i" } },
+      { lastName: { $regex: safeQuery, $options: "i" } },
+      { email: { $regex: safeQuery, $options: "i" } },
+      { phone: { $regex: safeQuery, $options: "i" } }
     ]
   };
 
@@ -128,9 +138,10 @@ const getInactiveUsers = asyncHandler(async (req, res) => {
 
 
 
+const isAdminType = (type) => ["Admin", "admin", "finance", "seo", "print"].includes(type);
+
 const updateUser = asyncHandler(async (req, res) => {
   const {
-    userId,
     firstName,
     lastName,
     email,
@@ -143,7 +154,7 @@ const updateUser = asyncHandler(async (req, res) => {
     dob
   } = req.body
 
-  const user = await User.findById(userId)
+  const user = await User.findById(req.user.id)
 
   if (!user) {
     return res.status(404).json({
@@ -163,10 +174,14 @@ const updateUser = asyncHandler(async (req, res) => {
   user.dob = dob || user.dob
 
   const updatedUser = await user.save()
+  const safeUser = updatedUser.toObject();
+  delete safeUser.password;
+  delete safeUser.refreshToken;
+  delete safeUser.otp;
 
   res.status(200).send({
     message: "Profile Updated Successfully",
-    user: updatedUser
+    user: safeUser
   })
 })
 
@@ -195,7 +210,13 @@ const getUserById = asyncHandler(async (req, res) => {
     });
   }
 
-  const user = await User.findById(id);
+  if (id !== req.user.id && !isAdminType(req.user.type)) {
+    return res.status(403).json({
+      message: "Not authorized to view this user"
+    });
+  }
+
+  const user = await User.findById(id).select("-password -refreshToken -otp");
 
   if (!user) {
     return res.status(404).json({
@@ -227,7 +248,7 @@ const userLogin = asyncHandler(async (req, res) => {
     if (user && (await user.isPasswordCorrect(password))) {
 
       if (!user.isEmailVerified) {
-        const otp = Math.floor(1000 + Math.random() * 9000);
+        const otp = generateOtp(4);
         sendVerificationEmail(otp, email)
         user.otp = otp
         await user.save()
@@ -245,18 +266,21 @@ const userLogin = asyncHandler(async (req, res) => {
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-
+      const safeUser = user.toObject();
+      delete safeUser.password;
+      delete safeUser.refreshToken;
+      delete safeUser.otp;
 
       res.json({
         message: "Login Success",
         otpSent: false,
         status: true,
-        user,
+        user: safeUser,
         accessToken,
         refreshToken,
         isEmailVerfied: true
@@ -288,22 +312,14 @@ const verifyUserProfile = asyncHandler(async (req, res) => {
     });
   }
 
-  if (phone && user.otpExpiresAt && Date.now() > user.otpExpiresAt) {
+  if (user.otpExpiresAt && Date.now() > user.otpExpiresAt) {
     return res.status(400).send({
       status: false,
       message: "OTP expired"
     });
   }
 
-
-  if (user.email !== "test@gmail.com" && user.otp !== otp) {
-    return res.status(400).send({
-      status: false,
-      message: "OTP not valid"
-    });
-  }
-
-  if (user.email === "test@gmail.com" && otp !== "1234") {
+  if (!user.otp || String(user.otp) !== String(otp)) {
     return res.status(400).send({
       status: false,
       message: "OTP not valid"
@@ -332,12 +348,10 @@ const verifyUserProfile = asyncHandler(async (req, res) => {
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
-
-
 
   res.status(200).send({
     status: true,
@@ -368,7 +382,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     });
   }
 
-  const otp = Math.floor(10000 + Math.random() * 90000);
+  const otp = generateOtp(5);
 
   sendResetEmail(existedUser.email, otp);
 
@@ -394,7 +408,7 @@ const resendOTP = asyncHandler(async (req, res) => {
     });
   }
 
-  const otp = Math.floor(1000 + Math.random() * 9000);
+  const otp = generateOtp(4);
   const otpExpiresAt = Date.now() + 5 * 60 * 1000;  // 5 min
   let emailSent = false;
 
@@ -430,7 +444,7 @@ const resendMobileOTP = asyncHandler(async (req, res) => {
     });
   }
 
-  const otp = Math.floor(1000 + Math.random() * 9000);
+  const otp = generateOtp(4);
   const otpExpiresAt = Date.now() + 5 * 60 * 1000;  // 5 min
   let phoneSent = false;
 
@@ -451,7 +465,6 @@ const resendMobileOTP = asyncHandler(async (req, res) => {
 
   return res.status(200).send({
     status: true,
-    otp,
     message: "OTP has been resent to your phone"
   });
 });
@@ -532,8 +545,7 @@ const registerUserGoogle = asyncHandler(async (req, res) => {
 
     const accessToken = await user.generateAccessToken()
     const { refreshToken, expiresAt } = await user.generateRefreshToken();
-    // user.refreshTokens.push({ token: refreshToken, expiresAt });
-    userExists.refreshToken = { token: refreshToken, expiresAt };
+    user.refreshToken = { token: refreshToken, expiresAt };
     await user.save();
 
     if (user) {
@@ -641,7 +653,7 @@ const loginUserWithMobile = asyncHandler(async (req, res) => {
   // console.log('phone', phone)
   let user = await User.findOne({ phone })
   // console.log("user", user)
-  const otp = Math.floor(1000 + Math.random() * 9000);
+  const otp = generateOtp(4);
   const otpExpiresAt = Date.now() + 5 * 60 * 1000;  // 5 min
 
   // console.log("otp", otp, ", otpExpiresAt", otpExpiresAt)
@@ -652,19 +664,16 @@ const loginUserWithMobile = asyncHandler(async (req, res) => {
     user.otp = otp
     user.otpExpiresAt = otpExpiresAt
     await user.save()
-    return res.status(200).send({ message: "OTP sent successfully.", otp })
+    return res.status(200).send({ message: "OTP sent successfully." })
   }
   await sendOTP(phone, otp)
-  // console.log("otpRes2", otpRes2)
   user = await User.create({
     phone,
     otp,
     otpExpiresAt
   })
 
-  // console.log('user', user)
-
-  res.send({ message: "OTP sent successfully.", otp })
+  res.send({ message: "OTP sent successfully." })
 
 })
 
@@ -672,7 +681,7 @@ const loginUserWithEmail = asyncHandler(async (req, res) => {
   const { email } = req.body
 
   const user = await User.findOne({ email })
-  const otp = Math.floor(1000 + Math.random() * 9000);
+  const otp = generateOtp(4);
 
   if (user) {
     sendVerificationEmail(otp, email)

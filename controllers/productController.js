@@ -6,6 +6,7 @@ const User = require("../models/userModel.js");
 const Order = require("../models/orderModel.js");
 const FlashSale = require("../models/flashModel.js");
 const mongoose = require("mongoose");
+const escapeRegex = require("../utils/escapeRegex");
 
 const attachRatingsToProducts = (products) => {
   return products.map((product) => {
@@ -796,7 +797,8 @@ const getProductByVisualId = asyncHandler(async (req, res) => {
 });
 
 const searchProducts = asyncHandler(async (req, res) => {
-  const { search, pageNumber = 1, pageSize = 20 } = req.query;
+  const { search: rawSearch, pageNumber = 1, pageSize = 20 } = req.query;
+  const search = rawSearch ? escapeRegex(rawSearch) : rawSearch;
 
   // const filter = search
   //   ? { name: { $regex: search, $options: "i" } }
@@ -869,7 +871,8 @@ const toggleNewArrivalProducts = asyncHandler(async (req, res) => {
 });
 
 const getBestSeller = asyncHandler(async (req, res) => {
-  const { pageNumber = 1, pageSize = 20, search } = req.query;
+  const { pageNumber = 1, pageSize = 20, search: rawSearch } = req.query;
+  const search = rawSearch ? escapeRegex(rawSearch) : rawSearch;
 
   const filter = {
     isActive: true,
@@ -896,7 +899,8 @@ const getBestSeller = asyncHandler(async (req, res) => {
 });
 
 const getNewArrival = asyncHandler(async (req, res) => {
-  const { pageNumber = 1, category, pageSize = 20, search } = req.query;
+  const { pageNumber = 1, category, pageSize = 20, search: rawSearch } = req.query;
+  const search = rawSearch ? escapeRegex(rawSearch) : rawSearch;
 
   const filter = {
     isActive: true,
@@ -925,7 +929,8 @@ const getNewArrival = asyncHandler(async (req, res) => {
 });
 
 const getFeaturedProducts = asyncHandler(async (req, res) => {
-  const { pageNumber = 1, category, pageSize = 20, search } = req.query;
+  const { pageNumber = 1, category, pageSize = 20, search: rawSearch } = req.query;
+  const search = rawSearch ? escapeRegex(rawSearch) : rawSearch;
 
   const filter = {
     isActive: true,
@@ -954,10 +959,11 @@ const getFeaturedProducts = asyncHandler(async (req, res) => {
 });
 
 const addItemInRecentlyViewed = asyncHandler(async (req, res) => {
-  const { userId, productId } = req.body;
+  const userId = req.user.id;
+  const { productId } = req.body;
 
-  if (!userId || !productId) {
-    return res.status(400).send({ message: "User and Product are required" });
+  if (!productId) {
+    return res.status(400).send({ message: "Product is required" });
   }
 
   const existingItem = await RecentlyViewedProduct.findOne({
@@ -993,7 +999,7 @@ const addItemInRecentlyViewed = asyncHandler(async (req, res) => {
 });
 
 const getRecentlyViewedItems = asyncHandler(async (req, res) => {
-  const { userId } = req.query;
+  const userId = req.user.id;
 
   const recentlyViewedItems = await RecentlyViewedProduct.find({
     user: userId,
@@ -1053,7 +1059,8 @@ const deleteProductImage = asyncHandler(async (req, res) => {
 });
 
 const searchBestSellerProducts = asyncHandler(async (req, res) => {
-  const { search, pageNumber = 1, pageSize = 20 } = req.query;
+  const { search: rawSearch, pageNumber = 1, pageSize = 20 } = req.query;
+  const search = rawSearch ? escapeRegex(rawSearch) : rawSearch;
 
   const filter = {
     isActive: true,
@@ -1079,7 +1086,8 @@ const searchBestSellerProducts = asyncHandler(async (req, res) => {
 });
 
 const searchNewArrivalProducts = asyncHandler(async (req, res) => {
-  const { search, pageNumber = 1, pageSize = 20 } = req.query;
+  const { search: rawSearch, pageNumber = 1, pageSize = 20 } = req.query;
+  const search = rawSearch ? escapeRegex(rawSearch) : rawSearch;
 
   const filter = {
     isActive: true,
@@ -1590,19 +1598,17 @@ const getProductReviewsByGroupId = asyncHandler(async (req, res) => {
 });
 
 const hasPurchasedProduct = asyncHandler(async (req, res) => {
-  const { userId, productId } = req.body;
+  const userId = req.user.id;
+  const { productId } = req.body;
 
-  if (!userId || !productId) {
+  if (!productId) {
     res.status(400);
-    throw new Error("userId and productId are required");
+    throw new Error("productId is required");
   }
 
-  if (
-    !mongoose.Types.ObjectId.isValid(userId) ||
-    !mongoose.Types.ObjectId.isValid(productId)
-  ) {
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
     res.status(400);
-    throw new Error("Invalid userId or productId");
+    throw new Error("Invalid productId");
   }
 
   const orderExists = await Order.exists({

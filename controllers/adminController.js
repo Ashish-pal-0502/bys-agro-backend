@@ -1,10 +1,11 @@
 const asyncHandler = require("express-async-handler")
 const bcrypt = require('bcrypt')
+const crypto = require('crypto')
 const Admin = require("../models/adminModel.js")
 const Order = require("../models/orderModel.js")
 const User = require("../models/userModel.js")
 const { createShiprocketShipmentForOrder } = require("./shiprocketService.js")
-const { sendOrderConfirmationEmail } = require("../middleware/handleEmail.js")
+const { sendOrderConfirmationEmail, sendResetEmail } = require("../middleware/handleEmail.js")
 
 const adminRegistration = asyncHandler(async (req, res) => {
     const { name, email, password } = req.body
@@ -44,11 +45,12 @@ const adminLogin = asyncHandler(async (req, res) => {
     if (email && password) {
         let admin = await Admin.findOne({ email })
         if (admin && (await admin.isPasswordCorrect(password))) {
-            admin.password = undefined;
             const token = await admin.generateAccessToken()
+            const safeAdmin = admin.toObject();
+            delete safeAdmin.password;
             res.json({
                 status: true,
-                admin,
+                admin: safeAdmin,
                 token
             });
         } else {
@@ -67,7 +69,8 @@ const resetPassword = asyncHandler(async (req, res) => {
     if (!existedAdmin) {
         return res.status(400).send({ status: false, message: 'Email not exist' })
     }
-    const randomPassword = await sendResetEmail()
+    const randomPassword = crypto.randomBytes(9).toString('base64');
+    await sendResetEmail(existedAdmin.email, randomPassword)
     existedAdmin.password = randomPassword
     await existedAdmin.save()
     res.status(200).send({ status: true, message: 'Check Your Email for Password Reset' })
@@ -76,7 +79,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 
 
 const getAllAdmins = asyncHandler(async (req, res) => {
-    const admins = await Admin.find({})
+    const admins = await Admin.find({}).select("-password")
 
     if (!admins || admins.length === 0) {
         throw new Error('No Admin Found')
@@ -88,7 +91,7 @@ const getAllAdmins = asyncHandler(async (req, res) => {
 const getAdminById = asyncHandler(async (req, res) => {
     const { adminId } = req.query
 
-    const admin = await Admin.findOne({ _id: adminId })
+    const admin = await Admin.findOne({ _id: adminId }).select("-password")
 
     if (!admin) {
         throw new Error('Admin not found')

@@ -100,10 +100,11 @@ const attachFlashSaleToProducts = async (products, userId = null) => {
 
 
 const addToCart = asyncHandler(async (req, res) => {
-  const { userId, item, type } = req.body;
+  const userId = req.user.id;
+  const { item, type } = req.body;
 
-  if (!userId || !item || !item.product || !item.qty) {
-    return res.status(400).send({ message: "userId and item {product, qty} required" });
+  if (!item || !item.product || !item.qty) {
+    return res.status(400).send({ message: "item {product, qty} required" });
   }
 
   const productExists = await Product.findById(item.product);
@@ -198,11 +199,7 @@ const addToCart = asyncHandler(async (req, res) => {
 // });
 
 const getUserCart = asyncHandler(async (req, res) => {
-  const { userId } = req.query;
-
-  if (!userId) {
-    return res.status(400).json({ message: "userId required" });
-  }
+  const userId = req.user.id;
 
   const cartItems = await Cart.find({ user: userId })
     .populate({
@@ -272,16 +269,16 @@ const removeFromCart = asyncHandler(async (req, res) => {
     return res.status(404).send({ message: "Cart item not found" });
   }
 
+  if (item.user.toString() !== req.user.id) {
+    return res.status(403).send({ message: "Not authorized to remove this item" });
+  }
+
   await Cart.deleteOne({ _id: cartItemId });
   res.json({ message: "Item removed" });
 });
 
 const clearCart = asyncHandler(async (req, res) => {
-  const { userId } = req.query;
-
-  if (!userId) {
-    return res.status(400).send({ message: "userId required" });
-  }
+  const userId = req.user.id;
 
   await Cart.deleteMany({ user: userId });
   res.json({ message: "Cart cleared" });
@@ -348,8 +345,9 @@ const clearCartInternally = asyncHandler(async (userId) => {
 
 
 const addLinkedItemToCart = asyncHandler(async (req, res) => {
-  const { userId, linkedProductId, parentProductId, linkedOfferId, quantity = 1 } = req.body;
-  
+  const userId = req.user.id;
+  const { linkedProductId, parentProductId, linkedOfferId, quantity = 1 } = req.body;
+
   const offer = await LinkedOffer.findOne({
     _id: linkedOfferId,
     parentProduct: parentProductId,
@@ -416,7 +414,7 @@ const addLinkedItemToCart = asyncHandler(async (req, res) => {
 
 
 const applyLinkedDiscountsToCart = asyncHandler(async (req, res) => {
-  const { userId } = req.body;
+  const userId = req.user.id;
 
   const cartItems = await Cart.find({ user: userId }).populate("product", "name price discount");
 

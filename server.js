@@ -4,6 +4,7 @@ const cors = require('cors')
 const cron = require('node-cron')
 const { requestBulkPickup } = require('./controllers/shiprocketService.js')
 const { limiter, corsOptions } = require('./middleware/config.js')
+const sanitizeRequest = require('./middleware/sanitize.js')
 const { notFound, errorHandler } = require("./middleware/errorMiddleware.js");
 const { dbConnect } = require('./db/connect.js')
 const userRoute = require('./routes/userRoute.js')
@@ -39,6 +40,7 @@ const PORT = process.env.PORT || 5000
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+app.use(sanitizeRequest)
 
 app.use(cors(corsOptions))
 app.options(/.*/, cors(corsOptions));

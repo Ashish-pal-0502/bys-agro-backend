@@ -1,5 +1,5 @@
 const express = require("express");
-const { admin } = require('../middleware/authMiddleware.js')
+const { isAdmin } = require('../middleware/authMiddleware.js')
 const {
   createBlog,
   getBlogs,
@@ -12,11 +12,11 @@ const {
 
 const router = express.Router();
 
-router.post("/create", createBlog);
-router.post("/update", updateBlog);
+router.post("/create", isAdmin, createBlog);
+router.post("/update", isAdmin, updateBlog);
 router.get("/get-all-blogs", getBlogs);
-router.delete("/delete", deleteBlog);
+router.delete("/delete", isAdmin, deleteBlog);
 router.route("/blogbyid/:id").get(getBlogById);
-router.route("/search-blog").get(searchBlog)
+router.route("/search-blog").get(isAdmin, searchBlog)
 
 module.exports = router;

@@ -1,14 +1,15 @@
 const asyncHandler = require("express-async-handler");
 const Blog = require("../models/blogModel");
-const AWS = require("aws-sdk");
-const ID = process.env.AWS_ACCESS_KEY;
-const SECRET = process.env.AWS_SECRET_KEY;
-const BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const { S3Client, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const s3KeyFromUrl = require("../utils/s3Key");
+const escapeRegex = require("../utils/escapeRegex");
 
-const s3 = new AWS.S3({
-  accessKeyId: ID,
-  secretAccessKey: SECRET,
-  region: "ap-south-1",
+const s3 = new S3Client({
+  region: process.env.AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY,
+    secretAccessKey: process.env.AWS_SECRET_KEY,
+  },
 });
 
 const createBlog = asyncHandler(async (req, res) => {
@@ -98,13 +99,12 @@ const deleteBlog = asyncHandler(async (req, res) => {
     const images = blog.image;
 
     for (let i = 0; i < images?.length; i++) {
-      const fileName = images[i].split("//")[1].split("/")[1];
-      var params = { Bucket: process.env.AWS_BUCKET, Key: fileName };
-
-      s3.deleteObject(params, function (err, data) {
-        if (err) console.log(err, err.stack);
-        else console.log("Image deleted successfully");
-      });
+      try {
+        const key = s3KeyFromUrl(images[i]);
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET, Key: key }));
+      } catch (err) {
+        console.error("Failed to delete blog image from S3:", err);
+      }
     }
 
     await blog.deleteOne({ _id: blog._id });
@@ -128,7 +128,7 @@ const getBlogById = asyncHandler(async (req, res) => {
 });
 
 const searchBlog = asyncHandler(async (req, res) => {
-  const query = req.query.Query?.trim()
+  const query = escapeRegex(req.query.Query?.trim() || "")
 
   const pageNumber = Number(req.query.pageNumber) || 1
   const pageSize = Number(req.query.pageSize) || 1

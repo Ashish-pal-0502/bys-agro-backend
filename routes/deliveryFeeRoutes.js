@@ -7,11 +7,12 @@ const {
   updateDeliveryFee,
   deleteDeliveryFee,
 } = require("../controllers/deliveryFeeController.js");
+const { isAdmin } = require("../middleware/authMiddleware.js");
 
-router.post("/create", createDeliveryFee);
-router.get("/all", getAllDeliveryFees);
+router.post("/create", isAdmin, createDeliveryFee);
+router.get("/all", isAdmin, getAllDeliveryFees);
 router.get("/get", getDeliveryFeeByPaymentMethod);
-router.post("/update", updateDeliveryFee);
-router.delete("/delete", deleteDeliveryFee);
+router.post("/update", isAdmin, updateDeliveryFee);
+router.delete("/delete", isAdmin, deleteDeliveryFee);
 
 module.exports = router;
