@@ -81,7 +81,8 @@ const userSchema = new mongoose.Schema(
       default: true,
     },
     deleted: {
-      default: Boolean,
+      type: Boolean,
+      default: false,
     },
     address: {
       area: { type: String },

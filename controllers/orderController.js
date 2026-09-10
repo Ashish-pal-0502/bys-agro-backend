@@ -16,6 +16,7 @@ const { getShiprocketToken } = require("../middleware/shiprocketAuth");
 const { sendOrderConfirmationEmail } = require('../middleware/handleEmail.js')
 const axios = require('axios')
 const dayjs = require("dayjs");
+const escapeRegex = require("../utils/escapeRegex");
 const { createSingleParcel } = require('../controllers/checkSlab.js')
 
 // const emailTemplate = require("../document/email");
@@ -1054,15 +1055,15 @@ const createBatchOrders = asyncHandler(async (req, res) => {
       itemsPrice,
       totalPrice,
       deliveredAt,
-      userId,
       notes,
-      isPaid,
       code,
       courierName,
       estimated_delivery_days,
       discount = 0,
       freeDelivery
     } = req.body;
+
+    const userId = req.user.id;
 
     if (!orderItems || orderItems.length === 0) {
       res.status(400);
@@ -1122,7 +1123,7 @@ const createBatchOrders = asyncHandler(async (req, res) => {
           totalLength: parcel.totalLength,
           paidAt,
           deliveredAt,
-          isPaid,
+          isPaid: false,
           discount,
           code,
           freeDelivery,
@@ -1357,6 +1358,10 @@ const verifyMultipleOrders = asyncHandler(async (req, res) => {
     }
 
     for (const order of orders) {
+      if (!order.user || order.user.toString() !== req.user.id) {
+        res.status(403);
+        throw new Error('Not authorized to verify one or more of these orders');
+      }
       if (order.paymentStatus !== 'pending') {
         res.status(400);
         throw new Error('One or more orders already verified');
@@ -1523,6 +1528,12 @@ const getOrderById = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Order not found");
   }
+
+  if (!order.user || order.user._id.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error("Not authorized to view this order");
+  }
+
   if (order.shipment?.awb) {
     try {
       const token = await getShiprocketToken();
@@ -1605,12 +1616,8 @@ const updateOrderToUnPaid = asyncHandler(async (req, res) => {
 });
 
 const getMyOrders = asyncHandler(async (req, res) => {
-  const { pageNumber = 1, pageSize = 20, userId } = req.query
-
-  if (!userId) {
-    res.status(400);
-    throw new Error("User not found");
-  }
+  const { pageNumber = 1, pageSize = 20 } = req.query
+  const userId = req.user.id
 
   const userExists = await User.findById(userId)
   if (!userExists) {
@@ -1719,15 +1726,7 @@ const updateOrderDeliveryStatus = asyncHandler(async (req, res) => {
         await product.save();
       }
     }
-    // reward algo
-    const reward = await UserReward.findOne({ user: order.user });
-
-    reward.amount =
-      reward.amount - order.itemsPrice * 0.01 < 0
-        ? 0
-        : reward.amount - order.itemsPrice * 0.01;
     const updatedOrder = await order.save();
-    await reward.save();
     res.json(updatedOrder);
   } else if (order && order.deliveryStatus == "Delivered") {
     order.deliveredAt = Date.now();
@@ -1839,13 +1838,13 @@ const getMonthlySales = asyncHandler(async (req, res) => {
   if (count % 10 !== 0) {
     pageCount = pageCount + 1;
   }
-  const d1 = parseISO(date);
+  const d1 = dayjs(date);
   const monthlySales = await Order.find({
     $and: [
       {
         createdAt: {
-          $gte: startOfMonth(d1),
-          $lte: endOfMonth(d1),
+          $gte: d1.startOf("month").toDate(),
+          $lte: d1.endOf("month").toDate(),
         },
       },
       { isPaid: true },
@@ -1861,8 +1860,8 @@ const getMonthlySales = asyncHandler(async (req, res) => {
 });
 const getSalesDateRange = asyncHandler(async (req, res) => {
   const { startDate, endDate } = req.query;
-  const s1 = parseISO(startDate);
-  const s2 = parseISO(endDate);
+  const s1 = dayjs(startDate);
+  const s2 = dayjs(endDate);
 
   const pageSize = 30;
   const page = Number(req.query.pageNumber) || 1;
@@ -1876,8 +1875,8 @@ const getSalesDateRange = asyncHandler(async (req, res) => {
     $and: [
       {
         createdAt: {
-          $gte: startOfDay(s1),
-          $lte: endOfDay(s2),
+          $gte: s1.startOf("day").toDate(),
+          $lte: s2.endOf("day").toDate(),
         },
       },
       { isPaid: true },
@@ -1898,15 +1897,15 @@ const getSalesDateRange = asyncHandler(async (req, res) => {
 
 const getOrderFilter = asyncHandler(async (req, res) => {
   const { startDate, endDate, status } = req.query;
-  const s1 = parseISO(startDate);
-  const s2 = parseISO(endDate);
+  const s1 = dayjs(startDate);
+  const s2 = dayjs(endDate);
   if (status) {
     const monthlySales = await Order.find({
       $and: [
         {
           createdAt: {
-            $gte: startOfDay(s1),
-            $lte: endOfDay(s2),
+            $gte: s1.startOf("day").toDate(),
+            $lte: s2.endOf("day").toDate(),
           },
         },
         { deliveryStatus: status },
@@ -1925,8 +1924,8 @@ const getOrderFilter = asyncHandler(async (req, res) => {
       $and: [
         {
           createdAt: {
-            $gte: startOfDay(s1),
-            $lte: endOfDay(s2),
+            $gte: s1.startOf("day").toDate(),
+            $lte: s2.endOf("day").toDate(),
           },
         },
         { isPaid: true },
@@ -2039,10 +2038,10 @@ const searchOrders = async (req, res) => {
     let filter = {};
 
     if (query && query.trim() !== "") {
-      const q = query.trim();
+      const q = escapeRegex(query.trim());
 
-      if (mongoose.Types.ObjectId.isValid(q)) {
-        filter._id = q;
+      if (mongoose.Types.ObjectId.isValid(query.trim())) {
+        filter._id = query.trim();
       } else {
         const users = await User.find({
           $or: [
@@ -2103,7 +2102,7 @@ const deleteOrder = asyncHandler(async (req, res) => {
 
 
 const searchPendingOrders = asyncHandler(async (req, res) => {
-  const query = req.query.Query;
+  const query = escapeRegex(req.query.Query || "");
   const pageSize = 30;
   const page = Number(req.query.pageNumber) || 1;
 
@@ -2164,7 +2163,7 @@ const searchPendingOrders = asyncHandler(async (req, res) => {
 });
 
 const searchFailedOrders = asyncHandler(async (req, res) => {
-  const query = req.query.Query;
+  const query = escapeRegex(req.query.Query || "");
   const pageSize = 30;
   const page = Number(req.query.pageNumber) || 1;
 

@@ -15,6 +15,9 @@ const verifyToken = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    if (decoded.tokenType && decoded.tokenType !== "access") {
+      return res.status(403).json({ status: false, message: "Invalid token type." });
+    }
     req.user = decoded;
     next();
   } catch (error) {
@@ -104,6 +107,10 @@ const isAdmin = asyncHandler(async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
 
+    if (decoded.tokenType && decoded.tokenType !== "access") {
+      return res.status(403).json({ status: false, message: "Invalid token type." });
+    }
+
     if (["Admin", "admin", "finance", "seo", "print"].includes(decoded.type)) {
       req.user = decoded;
       next();
@@ -134,6 +141,10 @@ const isUser = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
+
+    if (decoded.tokenType && decoded.tokenType !== "access") {
+      return res.status(403).json({ status: false, message: "Invalid token type." });
+    }
 
     if (decoded.type === "User" || decoded.type === "user") {
       req.user = decoded;

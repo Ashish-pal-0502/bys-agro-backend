@@ -18,6 +18,7 @@ const {
   deleteOrder,
   getPendingOrdersPaginated,
   searchPendingOrders,
+  searchFailedOrders,
   getWayBillNumberByOrder,
   getPendingOrdersForDownload,
   getOrdersForDownload,
@@ -29,38 +30,39 @@ const {
    schedulePickup,
    verifyOrdersByAdmin
 } = require("../controllers/orderController.js");
+const { isUser, isAdmin } = require("../middleware/authMiddleware.js");
 
 const router = express.Router();
 
-//products
-router.route("/").get(getOrders);
+// Customer-facing (own orders only, enforced in the controller)
+router.route("/myorders1").get(isUser, getMyOrders);
+router.route("/myorders-details").get(isUser, getOrderById);
+router.post('/create-order', isUser, createBatchOrders)
+router.route("/verify-order").post(isUser, verifyMultipleOrders);
+router.route("/payment").get(isUser, payment);
 
-router.route("/getmonthysales").get(getMonthlySales);
-router.route("/getPendingOrders").get(getPendingOrders);
-router.route("/getPendingOrdersPaginated").get(getPendingOrdersPaginated);
-router.route("/getPendingOrdersForDownload").get(getPendingOrdersForDownload);
-router.route("/search-pending-order").get(searchPendingOrders)
-router.route("/getsalesdaterange").get(getSalesDateRange);
-router.route("/myorders1").get(getMyOrders);
-router.route("/myorders-details").get(getOrderById);
-router.route("/orderfilter").get(getOrderFilter);
-router.route("/online-failed").get(getFailedOnlineOrders);
-router.route("/online-failed-for-download").get(getFailedOnlineOrdersForDownload);
-router.route("/update").post(updateOrderDeliveryStatus);
-router.route("/verify-order").post(verifyMultipleOrders);
-router.route("/verify-order-admin").post(verifyOrdersByAdmin);
-// router.route("/create-order").post(createOrder);
-router.post('/create-order', createBatchOrders)
-router.route("/update-order-to-paid").post(updateOrderToPaid);
-router.route("/update-order-to-paid-admin").post(updateOrderToPaidAdmin);
-router.route("/update-order-to-unpaid").post(updateOrderToUnPaid);
-router.route("/payment").get(payment);
-router.route("/get-orders").get(getOrders)
-router.route("/get-orders-for-download").get(getOrdersForDownload)
-router.route("/search-orders").get(searchOrders)
-router.route("/search-failed-orders").get(searchOrders)
-router.route("/delete-orders").delete(deleteOrder)
-router.route("/get-waybill-no").get(getWayBillNumberByOrder)
-router.get('/schedule-pickup', schedulePickup)
+// Admin-only
+router.route("/").get(isAdmin, getOrders);
+router.route("/getmonthysales").get(isAdmin, getMonthlySales);
+router.route("/getPendingOrders").get(isAdmin, getPendingOrders);
+router.route("/getPendingOrdersPaginated").get(isAdmin, getPendingOrdersPaginated);
+router.route("/getPendingOrdersForDownload").get(isAdmin, getPendingOrdersForDownload);
+router.route("/search-pending-order").get(isAdmin, searchPendingOrders)
+router.route("/getsalesdaterange").get(isAdmin, getSalesDateRange);
+router.route("/orderfilter").get(isAdmin, getOrderFilter);
+router.route("/online-failed").get(isAdmin, getFailedOnlineOrders);
+router.route("/online-failed-for-download").get(isAdmin, getFailedOnlineOrdersForDownload);
+router.route("/update").post(isAdmin, updateOrderDeliveryStatus);
+router.route("/verify-order-admin").post(isAdmin, verifyOrdersByAdmin);
+router.route("/update-order-to-paid").post(isAdmin, updateOrderToPaid);
+router.route("/update-order-to-paid-admin").post(isAdmin, updateOrderToPaidAdmin);
+router.route("/update-order-to-unpaid").post(isAdmin, updateOrderToUnPaid);
+router.route("/get-orders").get(isAdmin, getOrders)
+router.route("/get-orders-for-download").get(isAdmin, getOrdersForDownload)
+router.route("/search-orders").get(isAdmin, searchOrders)
+router.route("/search-failed-orders").get(isAdmin, searchFailedOrders)
+router.route("/delete-orders").delete(isAdmin, deleteOrder)
+router.route("/get-waybill-no").get(isAdmin, getWayBillNumberByOrder)
+router.get('/schedule-pickup', isAdmin, schedulePickup)
 
 module.exports = router;

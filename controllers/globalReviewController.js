@@ -2,7 +2,8 @@ const asyncHandler = require("express-async-handler")
 const GlobalReview = require("../models/globalReviewModel")
 
 const addGlobalReview = asyncHandler(async (req, res) => {
-  const { userId, productId, rating, comment} = req.body
+  const { productId, rating, comment} = req.body
+  const userId = req.user.id
 
   const globalReview = await GlobalReview.create({
     user: userId,

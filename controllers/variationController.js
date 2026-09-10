@@ -1,4 +1,5 @@
 const asyncHandler = require("express-async-handler");
+const escapeRegex = require("../utils/escapeRegex");
 const {
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -325,10 +326,11 @@ const deleteBanner = asyncHandler(async (req, res) => {
 const searchCategory = asyncHandler(async (req, res) => {
   const pageNumber = Number(req.query.pageNumber) || 1
   const pageSize = Number(req.query.pageSize) || 1
+  const safeQuery = escapeRegex(req.query.Query || "")
   const totalDocuments = await  Category.countDocuments({
     $or: [
-      { name: { $regex: req.query.Query, $options: "i" } },
-      { _id: req.query.Query }  
+      { name: { $regex: safeQuery, $options: "i" } },
+      { _id: req.query.Query }
     ]
   })
 
@@ -336,8 +338,8 @@ const searchCategory = asyncHandler(async (req, res) => {
 
   const categories = await Category.find({
     $or: [
-      { name: { $regex: req.query.Query, $options: "i" } },
-      { _id: req.query.Query }  
+      { name: { $regex: safeQuery, $options: "i" } },
+      { _id: req.query.Query }
     ]
   }).skip((pageNumber - 1) * pageSize).limit(pageSize)
   
@@ -351,11 +353,12 @@ const searchCategory = asyncHandler(async (req, res) => {
 const searchSubCategory = asyncHandler(async (req, res) => {
   const pageNumber = Number(req.query.pageNumber) || 1
   const pageSize = Number(req.query.pageSize) || 1
+  const safeQuery = escapeRegex(req.query.Query || "")
   const totalDocuments =  await SubCategory.countDocuments({
     $or: [
-      { name: { $regex: req.query.Query, $options: "i" } },
+      { name: { $regex: safeQuery, $options: "i" } },
       { _id: req.query.Query },
-      { category: { $regex: req.query.Query, $options: "i" } }
+      { category: { $regex: safeQuery, $options: "i" } }
     ]
   })
 
@@ -363,9 +366,9 @@ const searchSubCategory = asyncHandler(async (req, res) => {
 
   const subCategories = await SubCategory.find({
     $or: [
-      { name: { $regex: req.query.Query, $options: "i" } },
+      { name: { $regex: safeQuery, $options: "i" } },
       { _id: req.query.Query },
-      { category: { $regex: req.query.Query, $options: "i" } }
+      { category: { $regex: safeQuery, $options: "i" } }
     ]
   }).skip((pageNumber -1) * pageSize).limit(pageSize)
   
@@ -381,11 +384,11 @@ const searchSubCategory = asyncHandler(async (req, res) => {
 
 
 const searchCoupons = asyncHandler(async (req, res) => {
-  
-  const query = req.query.Query || "";
+
+  const query = escapeRegex(req.query.Query || "");
   const pageSize = 30;
   const page = Number(req.query.pageNumber) || 1;
-  
+
   const matchCriteria = {
     $or: [
       { name: { $regex: query, $options: "i" } }

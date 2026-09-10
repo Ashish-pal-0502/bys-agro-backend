@@ -4,10 +4,11 @@ const User = require('../models/userModel');
 const Product = require('../models/productModel');
 
 const addToWishlist = asyncHandler(async (req, res) => {
-  const { userId, productId } = req.body;
+  const userId = req.user.id;
+  const { productId } = req.body;
 
-  if (!userId || !productId) {
-    return res.status(400).json({ message: 'User ID and Product ID are required' });
+  if (!productId) {
+    return res.status(400).json({ message: 'Product ID is required' });
   }
 
   const user = await User.findById(userId);
@@ -25,9 +26,7 @@ const addToWishlist = asyncHandler(async (req, res) => {
 });
 
 const getWishlistByUser = asyncHandler(async (req, res) => {
-  const { userId } = req.query;
-
-  if (!userId) return res.status(400).json({ message: 'User ID is required' });
+  const userId = req.user.id;
 
   const wishlist = await Wishlist.find({ user: userId }).populate('product');
 
@@ -35,9 +34,10 @@ const getWishlistByUser = asyncHandler(async (req, res) => {
 });
 
 const removeFromWishlist = asyncHandler(async (req, res) => {
-  const { userId, productId } = req.query;
+  const userId = req.user.id;
+  const { productId } = req.query;
 
-  if (!userId || !productId) return res.status(400).json({ message: 'User ID and Product ID are required' });
+  if (!productId) return res.status(400).json({ message: 'Product ID is required' });
 
   const deleted = await Wishlist.findOneAndDelete({ user: userId, product: productId });
 
@@ -47,7 +47,7 @@ const removeFromWishlist = asyncHandler(async (req, res) => {
 });
 
 const clearWishlist = asyncHandler(async (req, res) => {
-  const { userId } = req.query
+  const userId = req.user.id;
 
   await Wishlist.deleteMany({ user: userId })
 

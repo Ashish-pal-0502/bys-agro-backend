@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const Coupon = require("../models/couponModel.js");
+const escapeRegex = require("../utils/escapeRegex");
 
 const createCoupon = asyncHandler(async (req, res) => {
   const { name, type, discount, maxDiscount, flatDiscount, limit, usedBy } = req.body;
@@ -160,7 +161,7 @@ const couponUsed = asyncHandler(async (req, res) => {
 
 const searchCoupons = asyncHandler(async (req, res) => {
 
-  const query = req.query.Query || "";
+  const query = escapeRegex(req.query.Query || "");
   const pageSize = 30;
   const page = Number(req.query.pageNumber) || 1;
 
@@ -189,11 +190,8 @@ const searchCoupons = asyncHandler(async (req, res) => {
 });
 
 const applyCoupon = asyncHandler(async (req, res) => {
-  const { code, userId } = req.query;
-
-  if (!userId) {
-    return res.status(400).json({ message: "User not found" });
-  }
+  const { code } = req.query;
+  const userId = req.user.id;
 
   const coupon = await Coupon.findOne({ name: code });
 

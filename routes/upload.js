@@ -2,6 +2,8 @@ const path = require("path");
 const express = require("express");
 const multer = require("multer");
 const asyncHandler = require('express-async-handler')
+const { isAdmin } = require('../middleware/authMiddleware')
+const s3KeyFromUrl = require('../utils/s3Key')
 const router = express.Router();
 
 const multerS3 = require("multer-s3");
@@ -19,6 +21,14 @@ const config = {
 
 const s3 = new S3Client(config);
 
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+]);
+
 const upload = multer({
   storage: multerS3({
     s3,
@@ -30,55 +40,65 @@ const upload = multer({
       cb(null, `${fileName}${path.extname(file.originalname)}`);
     },
   }),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 150,
+  },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      return cb(new Error("Only image files are allowed"));
+    }
+    cb(null, true);
+  },
 });
 
 router.post(
   "/uploadMultiple",
+  isAdmin,
   upload.array("image", 150),
   async (req, res) => {
     const result = req.files;
-    console.log('result', result)
     let arr = [];
     result.forEach((single) => {
       arr.push(single.location);
     });
 
-    //define what to do if result is empty
     res.send(arr);
   }
 );
 
 router.post(
   "/uploadSingleImage",
+  isAdmin,
   upload.single("image"),
   async (req, res) => {
     if(!req.file) {
       return res.status(400).send({ message: "File not found" })
     }
     const result = req.file;
-    
-    //define what to do if result is empty
+
     res.send(`${result.location}`);
   }
 );
 
-router.delete("/deleteImage", asyncHandler(async (req, res) => {
+router.delete("/deleteImage", isAdmin, asyncHandler(async (req, res) => {
   let image = req.query.image;
   image = Array.isArray(image) ? image : [image];
 
   try {
       for (const file of image) {
-          const fileName = file.split("//")[1].split("/")[1];
+          const key = s3KeyFromUrl(file);
 
           const command = new DeleteObjectCommand({
               Bucket: process.env.AWS_BUCKET,
-              Key: fileName,
+              Key: key,
           });
-          await s3.send(command); 
+          await s3.send(command);
       }
       res.status(200).send({ message: 'Deletion successful' });
   } catch (e) {
-      res.status(400).send({ message: 'Deletion Failed', error: e });
+      console.error("S3 deletion failed:", e);
+      res.status(400).send({ message: 'Deletion Failed' });
   }
 }));
 

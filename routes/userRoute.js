@@ -1,5 +1,5 @@
 const express = require('express')
-const { 
+const {
   createUser,
   getUsers,
   updateUser,
@@ -18,31 +18,33 @@ const {
   loginUserWithMobile,
   resendMobileOTP,
   searchUsers,
-  sendEmailToUsers 
+  sendEmailToUsers
  } = require('../controllers/userController')
-const { 
+const {
    isUser,
+   isAdmin,
  } = require('../middleware/authMiddleware')
+const { authLimiter } = require('../middleware/config')
 const router = express.Router()
 
-router.post('/register', createUser)
+router.post('/register', authLimiter, createUser)
 router.post('/update', isUser, updateUser)
-router.post('/auth-user', userLogin)
-router.get('/get-users', getUsers)
-router.get('/get-user-by-id', getUserById)
-router.post('/resend-otp', resendOTP)
-router.post('/reset-password', resetPassword)
-router.delete('/delete', deleteUser)
-router.get('/inactive', getInactiveUsers)
-router.post('/verify', verifyUserProfile)
+router.post('/auth-user', authLimiter, userLogin)
+router.get('/get-users', isAdmin, getUsers)
+router.get('/get-user-by-id', isUser, getUserById)
+router.post('/resend-otp', authLimiter, resendOTP)
+router.post('/reset-password', authLimiter, resetPassword)
+router.delete('/delete', isAdmin, deleteUser)
+router.get('/inactive', isAdmin, getInactiveUsers)
+router.post('/verify', authLimiter, verifyUserProfile)
 router.post('/register-user-google', registerUserGoogle)
 router.post('/auth-user-google', authUserGoogle)
 router.post('/refresh-tokens', refreshAccessToken)
 router.post('/logout', logoutUser)
-router.post('/login-with-email', loginUserWithEmail)
-router.post('/login-with-mobile', loginUserWithMobile)
-router.post('/resend-mobile-otp', resendMobileOTP)
-router.get('/search-users', searchUsers)
-router.post("/email/send", sendEmailToUsers);
+router.post('/login-with-email', authLimiter, loginUserWithEmail)
+router.post('/login-with-mobile', authLimiter, loginUserWithMobile)
+router.post('/resend-mobile-otp', authLimiter, resendMobileOTP)
+router.get('/search-users', isAdmin, searchUsers)
+router.post("/email/send", isAdmin, sendEmailToUsers);
 
 module.exports = router

@@ -8,16 +8,17 @@ const {
         addLinkedItemToCart,
         applyLinkedDiscountsToCart,
 } = require('../controllers/cartController')
+const { isUser } = require('../middleware/authMiddleware')
 const router = express.Router()
 
 
-router.post('/add', addToCart)
-router.get('/get', getUserCart)
-router.delete('/remove', removeFromCart)
-router.delete('/clear', clearCart)
+router.post('/add', isUser, addToCart)
+router.get('/get', isUser, getUserCart)
+router.delete('/remove', isUser, removeFromCart)
+router.delete('/clear', isUser, clearCart)
 // cart with linked offers
-router.post("/add-linked-item", addLinkedItemToCart);
-router.post("/apply-linked-discounts", applyLinkedDiscountsToCart);
+router.post("/add-linked-item", isUser, addLinkedItemToCart);
+router.post("/apply-linked-discounts", isUser, applyLinkedDiscountsToCart);
 
 
 module.exports = router

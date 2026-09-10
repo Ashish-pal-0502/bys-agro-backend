@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const Testimonial = require("../models/testimonialModel.js")
+const escapeRegex = require("../utils/escapeRegex");
 
 //Create Testimonial
 const createTestimonial = asyncHandler( async (req, res) => {
@@ -59,7 +60,7 @@ const getAllTestimonials = asyncHandler( async (req, res) => {
 	const filter = {}; 
 
 	if(searchQuery){
-		const regex = new RegExp(searchQuery, "i"); 
+		const regex = new RegExp(escapeRegex(searchQuery), "i");
 		filter.$or = [
 			{name: regex}, 
 			{location: regex}, 
