@@ -38,22 +38,43 @@ const whitelist = ['http://localhost:5000', 'http://localhost:5173', 'http://loc
   
 ]
 
+// const corsOptions = {
+//   origin: function (origin, callback) {
+//     // Only allow requests with no Origin header (curl, server-to-server, health checks)
+//     // outside of production. In production every credentialed request must present
+//     // a whitelisted Origin.
+//     if (!origin) {
+//       return callback(process.env.NODE_ENV === "production" ? new Error("Not allowed by CORS") : null, true);
+//     }
+//     if (whitelist.indexOf(origin) !== -1) {
+//       callback(null, true)
+//     } else {
+//       callback(new Error('Not allowed by  CORS'))
+//     }
+//   },
+//   credentials: true
+// }
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // Only allow requests with no Origin header (curl, server-to-server, health checks)
-    // outside of production. In production every credentialed request must present
-    // a whitelisted Origin.
+    // ✅ Allow requests without an Origin header (Postman, curl,
+    // server-to-server, health checks, mobile apps). CORS doesn't apply
+    // to non-browser clients — auth middleware handles authorization.
     if (!origin) {
-      return callback(process.env.NODE_ENV === "production" ? new Error("Not allowed by CORS") : null, true);
+      return callback(null, true);
     }
+
     if (whitelist.indexOf(origin) !== -1) {
-      callback(null, true)
+      callback(null, true);
     } else {
-      callback(new Error('Not allowed by  CORS'))
+      console.error(`❌ CORS BLOCKED: "${origin}"`);
+      console.error(`   → Add this exact string to the whitelist array`);
+      callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true
-}
+  credentials: true,
+};
+
 
 module.exports = {
     limiter,
