@@ -33,6 +33,8 @@ const whitelist = ['http://localhost:5000', 'http://localhost:5173', 'http://loc
   'https://bys-agro-frontend.onrender.com',
   'http://bys-agro-panel.s3-website.ap-south-1.amazonaws.com',
   'http://3.109.124.131:3000',
+  'https://main.dt06z443eijgj.amplifyapp.com',
+
   
 ]
 
