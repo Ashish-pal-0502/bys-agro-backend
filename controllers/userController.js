@@ -264,12 +264,13 @@ const userLogin = asyncHandler(async (req, res) => {
       await user.save();
 
 
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+    res.cookie("refreshToken", refreshToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
 
       const safeUser = user.toObject();
       delete safeUser.password;
@@ -346,12 +347,13 @@ const verifyUserProfile = asyncHandler(async (req, res) => {
   delete safeUser.otp;
   delete safeUser.__v;
 
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+ res.cookie("refreshToken", refreshToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
 
   res.status(200).send({
     status: true,
@@ -490,6 +492,14 @@ const authUserGoogle = asyncHandler(async (req, res) => {
   await user.save();
 
   if (user) {
+
+     res.cookie("refreshToken", refreshToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
     res.json({
       message: "User login successfully.",
       _id: user._id,
@@ -526,6 +536,13 @@ const registerUserGoogle = asyncHandler(async (req, res) => {
     // userExists.refreshTokens.push({ token: refreshToken, expiresAt });
     userExists.refreshToken = { token: refreshToken, expiresAt }
     await userExists.save();
+     res.cookie("refreshToken", refreshToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
 
     return res.status(200).send({
       message: "User login successfully.",
@@ -549,6 +566,14 @@ const registerUserGoogle = asyncHandler(async (req, res) => {
     await user.save();
 
     if (user) {
+
+       res.cookie("refreshToken", refreshToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
       return res.status(201).json({
         message: "User registered successfully.",
         _id: user._id,
@@ -569,6 +594,7 @@ const registerUserGoogle = asyncHandler(async (req, res) => {
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
 
   if (!refreshToken) {
     return res.status(401).json({
@@ -619,30 +645,34 @@ const logoutUser = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
   if (!refreshToken) {
-    return res.status(400).json({
-      message: "Refresh token required.",
-    });
+    return res.status(400).json({ message: "Refresh token required." });
   }
 
   const user = await User.findOne({ "refreshToken.token": refreshToken });
   if (!user) {
-    return res.status(200).json({
-      message: "Already logged out.",
+    // Still clear the cookie even if user already logged out
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: "/",
     });
+    return res.status(200).json({ message: "Already logged out." });
   }
 
-  // user.refreshTokens = user.refreshTokens.filter(
-  //   (t) => t.token !== refreshToken
-  // );
   user.refreshToken = null;
-
   await user.save();
 
-  return res.status(200).json({
-    message: "Logged out successfully.",
+  //  CLEAR THE httpOnly COOKIE
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    path: "/",
   });
-});
 
+  return res.status(200).json({ message: "Logged out successfully." });
+});
 
 const loginUserWithMobile = asyncHandler(async (req, res) => {
   const { phone } = req.body

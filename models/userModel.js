@@ -120,7 +120,7 @@ userSchema.methods.isPasswordCorrect = async function (password) {
   return isMatch;
 };
 
-const ACCESS_TOKEN_EXPIRES_IN = "1h";
+const ACCESS_TOKEN_EXPIRES_IN = "15m";
 const REFRESH_TOKEN_EXPIRES_IN = "7d";
 
 userSchema.methods.generateAccessToken = async function () {
