@@ -18,7 +18,8 @@ const {
   loginUserWithMobile,
   resendMobileOTP,
   searchUsers,
-  sendEmailToUsers
+  sendEmailToUsers,
+  firebaseAuth
  } = require('../controllers/userController')
 const {
    isUser,
@@ -46,5 +47,6 @@ router.post('/login-with-mobile', authLimiter, loginUserWithMobile)
 router.post('/resend-mobile-otp', authLimiter, resendMobileOTP)
 router.get('/search-users', isAdmin, searchUsers)
 router.post("/email/send", isAdmin, sendEmailToUsers);
+router.post("/firebase", firebaseAuth);
 
 module.exports = router

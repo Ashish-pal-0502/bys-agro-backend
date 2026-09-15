@@ -54,7 +54,7 @@ const upload = multer({
 
 router.post(
   "/uploadMultiple",
-  isAdmin,
+  
   upload.array("image", 150),
   async (req, res) => {
     const result = req.files;
