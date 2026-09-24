@@ -57,6 +57,13 @@ const orderSchema = mongoose.Schema(
     invoiceId: {
       type: String,
     },
+    razorpayOrderId: {
+      type: String,
+    },
+    razorpayPaymentId: {
+      type: String,
+      index: true,
+    },
     isPaid: {
       type: Boolean,
     },

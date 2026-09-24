@@ -487,19 +487,51 @@ const resendMobileOTP = asyncHandler(async (req, res) => {
   });
 });
 
+const googleClient = new OAuth2Client();
+
+// The expected audience comes from server config, never from the request: a client-supplied
+// audience lets a token minted for any other Google OAuth app be replayed here.
+const verifyGoogleIdToken = async (idToken) => {
+  const audience = (process.env.GOOGLE_CLIENT_ID || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  if (audience.length === 0) {
+    console.error("GOOGLE_CLIENT_ID is not set; refusing Google login");
+    return { status: 500, message: "Google login is not configured" };
+  }
+
+  if (!idToken || typeof idToken !== "string") {
+    return { status: 400, message: "Google token is required" };
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken, audience });
+    const payload = ticket.getPayload();
+
+    if (!payload?.email || payload.email_verified !== true) {
+      return { status: 401, message: "Google account email is not verified" };
+    }
+
+    return { payload };
+  } catch (err) {
+    return { status: 401, message: "Invalid Google token" };
+  }
+};
+
 const authUserGoogle = asyncHandler(async (req, res) => {
-  const { client_id, jwtToken } = req.body;
+  const { jwtToken } = req.body;
 
-  const client = new OAuth2Client(client_id);
+  const { payload, status, message } = await verifyGoogleIdToken(jwtToken);
+  if (!payload) {
+    return res.status(status).json({ message });
+  }
 
-  const ticket = await client.verifyIdToken({
-    idToken: jwtToken,
-    audience: client_id,
-  });
-
-  const payload = ticket.getPayload();
-  // console.log(payload)
   const user = await User.findOne({ email: payload.email });
+  if (!user) {
+    return res.status(404).json({ message: "No account found for this Google email" });
+  }
   const accessToken = await user.generateAccessToken();
   const { refreshToken, expiresAt } = await user.generateRefreshToken();
   // user.refreshTokens.push({ token: refreshToken, expiresAt });
@@ -533,16 +565,12 @@ const authUserGoogle = asyncHandler(async (req, res) => {
 
 
 const registerUserGoogle = asyncHandler(async (req, res) => {
-  const { client_id, jwtToken } = req.body;
+  const { jwtToken } = req.body;
 
-  const client = new OAuth2Client(client_id);
-
-  const ticket = await client.verifyIdToken({
-    idToken: jwtToken,
-    audience: client_id,
-  });
-
-  const payload = ticket.getPayload();
+  const { payload, status, message } = await verifyGoogleIdToken(jwtToken);
+  if (!payload) {
+    return res.status(status).json({ message });
+  }
 
   const userExists = await User.findOne({ email: payload.email });
 

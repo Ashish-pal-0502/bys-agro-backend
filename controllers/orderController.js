@@ -17,6 +17,7 @@ const { sendOrderConfirmationEmail } = require('../middleware/handleEmail.js')
 const axios = require('axios')
 const dayjs = require("dayjs");
 const escapeRegex = require("../utils/escapeRegex");
+const { isValidSignature, fetchRazorpayOrder, checkRazorpayOrder } = require("../services/razorpay");
 const { createSingleParcel } = require('../controllers/checkSlab.js')
 
 // const emailTemplate = require("../document/email");
@@ -1326,99 +1327,121 @@ const verifyOrder = asyncHandler(async (req, res) => {
 });
 
 const verifyMultipleOrders = asyncHandler(async (req, res) => {
+  const { orderIds, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+  if (
+    !Array.isArray(orderIds) ||
+    orderIds.length === 0 ||
+    orderIds.length > 50 ||
+    !orderIds.every((id) => typeof id === "string" && mongoose.Types.ObjectId.isValid(id))
+  ) {
+    return res.status(400).json({ message: "orderIds must be a non-empty array of order ids" });
+  }
+
+  if (
+    typeof razorpay_order_id !== "string" ||
+    typeof razorpay_payment_id !== "string" ||
+    typeof razorpay_signature !== "string"
+  ) {
+    return res.status(400).json({ message: "Razorpay payment details are required" });
+  }
+
+  if (!process.env.RAZOR_PAY_SECRET) {
+    console.error("RAZOR_PAY_SECRET is not set; refusing to verify payments");
+    return res.status(500).json({ message: "Payment verification is not configured" });
+  }
+
+  const orders = await Order.find({ _id: { $in: orderIds } });
+
+  if (orders.length !== orderIds.length) {
+    return res.status(404).json({ message: "One or more orders not found" });
+  }
+
+  for (const order of orders) {
+    if (!order.user || order.user.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to verify one or more of these orders" });
+    }
+  }
+
+  // Retried callback for a payment we already accepted: report success again instead of erroring.
+  if (
+    orders.every(
+      (o) => o.paymentStatus === "completed" && o.razorpayPaymentId === razorpay_payment_id
+    )
+  ) {
+    return res.status(200).json({
+      message: "Payment already verified",
+      paymentStatus: "completed",
+      orders,
+    });
+  }
+
+  if (orders.some((o) => o.paymentStatus !== "pending")) {
+    return res.status(400).json({ message: "One or more orders were already processed" });
+  }
+
+  // Orders stay pending on any failure below; the 10-minute job fails them and restores stock.
+  if (!isValidSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
+    return res.status(400).json({ message: "Payment signature is invalid", paymentStatus: "failed" });
+  }
+
+  const paymentAlreadyUsed = await Order.exists({
+    razorpayPaymentId: razorpay_payment_id,
+    _id: { $nin: orderIds },
+  });
+  if (paymentAlreadyUsed) {
+    return res.status(400).json({ message: "This payment was already used", paymentStatus: "failed" });
+  }
+
+  let rzpOrder;
+  try {
+    rzpOrder = await fetchRazorpayOrder(razorpay_order_id);
+  } catch (err) {
+    console.error("Razorpay order lookup failed:", err?.error || err?.message || err);
+    return res.status(502).json({ message: "Could not confirm the payment with Razorpay. Please try again." });
+  }
+
+  const problem = checkRazorpayOrder(rzpOrder, {
+    razorpayOrderId: razorpay_order_id,
+    userId: req.user.id,
+    orders,
+  });
+  if (problem) {
+    console.error(`Payment check failed for orders ${orderIds.join(",")}: ${problem}`);
+    return res.status(400).json({ message: problem, paymentStatus: "failed" });
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const {
-      orderIds,
-      paymentStatus,
-      paymentMethod,
-      invoiceId,
-      paidAt
-    } = req.body;
-
-    if (!Array.isArray(orderIds) || orderIds.length === 0) {
-      res.status(400);
-      throw new Error('orderIds must be a non-empty array');
+    const fresh = await Order.find({ _id: { $in: orderIds } }).session(session);
+    if (fresh.some((o) => o.paymentStatus !== "pending")) {
+      throw new Error("One or more orders were already processed");
     }
 
-    if (!paymentStatus) {
-      res.status(400);
-      throw new Error('paymentStatus is required');
+    for (const order of fresh) {
+      order.paymentStatus = "completed";
+      order.isPaid = true;
+      order.paidAt = new Date();
+      order.razorpayOrderId = razorpay_order_id;
+      order.razorpayPaymentId = razorpay_payment_id;
+      await order.save({ session });
     }
 
-    const orders = await Order.find({
-      _id: { $in: orderIds }
-    }).session(session);
+    await session.commitTransaction();
+    session.endSession();
 
-    if (orders.length !== orderIds.length) {
-      res.status(404);
-      throw new Error('One or more orders not found');
-    }
-
-    for (const order of orders) {
-      if (!order.user || order.user.toString() !== req.user.id) {
-        res.status(403);
-        throw new Error('Not authorized to verify one or more of these orders');
-      }
-      if (order.paymentStatus !== 'pending') {
-        res.status(400);
-        throw new Error('One or more orders already verified');
-      }
-    }
-
-    if (paymentStatus === 'failed') {
-      for (const order of orders) {
-        for (const item of order.orderItems) {
-          const qty = item.qty || item.quantity || 0;
-
-          await Inventory.updateOne(
-            { product: item.product },
-            { $inc: { quantity: qty } },
-            { session }
-          );
-        }
-
-        order.paymentStatus = 'failed';
-        order.isPaid = false;
-        order.paymentMethod = paymentMethod || order.paymentMethod;
-        order.invoiceId = invoiceId || order.invoiceId;
-
-        await order.save({ session });
-      }
-
-      await session.commitTransaction();
-      session.endSession();
-
-      return res.status(200).json({
-        message: 'Payment failed. Inventory reverted for all orders.',
-        orders
-      });
-    }
-
-    if (paymentStatus === 'completed') {
-      for (const order of orders) {
-        order.paymentStatus = 'completed';
-        order.isPaid = true;
-        order.paidAt = paidAt || new Date();
-        order.paymentMethod = paymentMethod;
-        order.invoiceId = invoiceId;
-
-        const user = await User.findOne({ _id: order.user })
-        let userName = "Customer"
-        if (user && user.firstName && user.lastName) {
-          userName = `${user.firstName} ${user.lastName}`
-        } else if (user && user.firstName) {
-          userName = `${user.firstName}`
-        } else if (user.email) {
-          userName = user.email
-        } else {
-          userName = "Customer"
-        }
+    for (const order of fresh) {
+      try {
+        const user = await User.findById(order.user);
+        const userName =
+          user?.firstName && user?.lastName
+            ? `${user.firstName} ${user.lastName}`
+            : user?.firstName || user?.email || "Customer";
 
         sendOrderConfirmationEmail({
-          userName: userName,
+          userName,
           email: order.shippingAddress?.email,
           orderItems: order.orderItems,
           orderId: order._id,
@@ -1429,25 +1452,19 @@ const verifyMultipleOrders = asyncHandler(async (req, res) => {
           totalPrice: order.totalPrice,
           shippingAddress: order.shippingAddress,
           billingAddress: order.shippingAddress,
-          visualId: order.visualId || order._id
-        })
-
-
-        await order.save({ session });
+          visualId: order.visualId || order._id,
+        });
+      } catch (err) {
+        console.error("Order confirmation email failed:", err);
       }
-
-      await session.commitTransaction();
-      session.endSession();
-
-      orders.forEach(o => createShiprocketShipmentForOrder(o._id));
-
-      return res.status(200).json({
-        message: 'Payment verified successfully for all orders',
-        orders
-      });
+      createShiprocketShipmentForOrder(order._id);
     }
 
-    throw new Error('Invalid payment status');
+    return res.status(200).json({
+      message: "Payment verified successfully",
+      paymentStatus: "completed",
+      orders: fresh,
+    });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -1948,19 +1965,18 @@ const payment = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Invalid amount", });
   }
 
-  const user = await User.findById(req.query.userId);
-
   const instance = new Razorpay({
     key_id: process.env.RAZOR_PAY_ID,
     key_secret: process.env.RAZOR_PAY_SECRET,
   });
 
+  // notes.userId is what verify-order later checks the payment against
   const result = await instance.orders.create({
     amount: total * 100,
     currency: "INR",
-    receipt: "receipt#1",
+    receipt: `rcpt_${req.user.id}_${Date.now()}`.slice(0, 40),
     notes: {
-      userId: user._id,
+      userId: req.user.id,
       key: process.env.RAZOR_PAY_ID,
     },
   });
