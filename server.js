@@ -37,7 +37,6 @@ dotenv.config()
 const app = express()
 dbConnect()
 
-// check
 
 const PORT = process.env.PORT || 5000
 
