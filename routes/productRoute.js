@@ -50,7 +50,7 @@ router.route("/toggle-new-arrival-products").post(isAdmin, toggleNewArrivalProdu
 router.route("/delete-product-image").delete(isAdmin, deleteProductImage);
 router.route("/delete").delete(isAdmin, deleteProduct);
 router.route("/active").get(isAdmin, activeProduct);
-router.route("/create-product-review").post(isAdmin, createProductReview);
+router.route("/create-product-review").post(createProductReview);
 
 // Public catalog reads (storefront)
 router.route("/get-all-products").get(getAllProduct);
