@@ -1,7 +1,8 @@
 const express = require('express')
 const dotenv = require('dotenv')
 const cors = require('cors')
-const cookieParser = require('cookie-parser') 
+const cookieParser = require('cookie-parser')
+const morgan = require('morgan') 
 const cron = require('node-cron')
 const { requestBulkPickup } = require('./controllers/shiprocketService.js')
 const { limiter, corsOptions } = require('./middleware/config.js')
@@ -40,9 +41,18 @@ dbConnect()
 
 const PORT = process.env.PORT || 5000
 
+// Behind nginx / a load balancer every request looks like it comes from the proxy, so all visitors would
+// share one rate-limit bucket. Set TRUST_PROXY to the number of proxies in front of this server (usually 1).
+const TRUST_PROXY = Number(process.env.TRUST_PROXY || 0)
+if (TRUST_PROXY > 0) app.set('trust proxy', TRUST_PROXY)
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser()) 
+
+// Access log without query strings: search URLs can carry emails and phone numbers.
+morgan.token('safe-path', (req) => req.originalUrl.split('?')[0])
+app.use(morgan(':remote-addr :method :safe-path :status :res[content-length] - :response-time ms'))
 app.use(sanitizeRequest)
 
 app.use(cors(corsOptions))

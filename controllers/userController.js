@@ -13,7 +13,6 @@ const {
 const { default: isEmail } = require('validator/lib/isEmail');
 const sendOTP = require('../services/smsService');
 const escapeRegex = require('../utils/escapeRegex');
-const firebaseAdminAuth = require("../services/firebase.js")
 
 
 
@@ -21,19 +20,6 @@ const generateOtp = (digits = 4) => {
   const min = 10 ** (digits - 1);
   const max = 10 ** digits - 1;
   return crypto.randomInt(min, max + 1);
-};
-
-const generateUniqueHandle = async (base) => {
-    const cleanBase = (base || "user").toLowerCase().replace(/[^a-z0-9]/g, "") || "user";
-    let handle = cleanBase;
-    let suffix = 0;
-
-    while (await User.exists({ handle })) {
-        suffix += 1;
-        handle = `${cleanBase}${suffix}`;
-    }
-
-    return handle;
 };
 
 const createUser = asyncHandler(async (req, res) => {
@@ -251,6 +237,10 @@ const getUserById = asyncHandler(async (req, res) => {
 
 const userLogin = asyncHandler(async (req, res) => {
   const { email, password } = req.body
+
+  if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+    return res.status(400).send({ message: "Email and password are required" })
+  }
 
   if (email && password) {
     let user = await User.findOne({ email })
@@ -848,88 +838,6 @@ const sendEmailToUsers = asyncHandler(async (req, res) => {
   });
 });
 
-const firebaseAuth = asyncHandler(async (req, res) => {
-    const { idToken } = req.body;
-
-    if (!idToken) {
-        return res.status(422).json({
-            success: false,
-            error: "validation_error",
-            message: "idToken is required",
-        });
-    }
-
-    let decoded;
-    try {
-        decoded = await firebaseAdminAuth.verifyIdToken(idToken);
-    } catch (err) {
-        return res.status(401).json({
-            success: false,
-            error: "firebase_invalid",
-            message: "Invalid or expired token",
-        });
-    }
-
-    let user;
-    let isNewUser = false;
-
-    try {
-        user = await User.findOne({ firebaseUid: decoded.uid });
-
-        if (!user) {
-            isNewUser = true;
-            const baseHandle = decoded.phone_number
-                ? decoded.phone_number.slice(-4)
-                : (decoded.name || "user");
-            const handle = await generateUniqueHandle(baseHandle);
-
-            user = await User.create({
-                firebaseUid: decoded.uid,
-                mobile: decoded.phone_number || undefined,
-                displayName: decoded.name || undefined,
-                avatarUrl: decoded.picture || undefined,
-                handle,
-                verified: true,
-            });
-        }
-    } catch (err) {
-        return res.status(500).json({
-            success: false,
-            error: "firebase_error",
-            message: "Failed to find or create user",
-        });
-    }
-
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
-    user.refreshToken = refreshToken;
-    await user.save();
-
-     res.cookie("refreshToken", refreshToken, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "none",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/",
-});
-
-    res.status(200).json({
-        success: true,
-        data: {
-            accessToken,
-            refreshToken,
-            isNewUser,
-            user: {
-                id: user._id,
-                handle: user.handle,
-                displayName: user.displayName,
-                avatarUrl: user.avatarUrl,
-                verified: user.verified,
-            },
-        },
-    });
-});
-
 module.exports = {
   createUser,
   getUsers,
@@ -950,6 +858,5 @@ module.exports = {
   resendMobileOTP,
   searchUsers,
   getRelatedProductsByConcerns,
-  sendEmailToUsers,
-  firebaseAuth
+  sendEmailToUsers
 };

@@ -54,14 +54,14 @@ const upload = multer({
 
 router.post(
   "/uploadMultiple",
-  
+  isAdmin,
   upload.array("image", 150),
   async (req, res) => {
-    const result = req.files;
-    let arr = [];
-    result.forEach((single) => {
-      arr.push(single.location);
-    });
+    const result = req.files || [];
+    if (result.length === 0) {
+      return res.status(400).send({ message: "No files uploaded" });
+    }
+    const arr = result.map((single) => single.location);
 
     res.send(arr);
   }

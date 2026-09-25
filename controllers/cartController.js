@@ -5,6 +5,7 @@ const FlashSale = require('../models/flashModel')
 const Inventory = require('../models/inventoryModel')
 const User = require('../models/userModel')
 const LinkedOffer = require('../models/linkedOfferModel')
+const { priceUserCart } = require('../services/orderQuote')
 // const attachFlashSaleToProducts = async (products) => {
 //   const now = new Date();
 
@@ -416,62 +417,27 @@ const addLinkedItemToCart = asyncHandler(async (req, res) => {
 const applyLinkedDiscountsToCart = asyncHandler(async (req, res) => {
   const userId = req.user.id;
 
-  const cartItems = await Cart.find({ user: userId }).populate("product", "name price discount");
+  const priced = await priceUserCart(userId);
 
-  // let subtotal = 0;
-  let totalMRP = 0;
-  let totalComboDiscount = 0;
-  let totalMRPDiscount = 0;
-
-  for (const item of cartItems) {
-    totalMRP += item.product.price * item.quantity;
-    let finalPrice = item.product.price;
-    totalMRPDiscount += item.product.price * (item.product.discount / 100) * item.quantity;
-
-    if (item.linkedVia?.linkedOfferId) {
-      const parentExists = cartItems.some(
-        cartItem => cartItem.product._id.toString() === item.linkedVia.parentProductId?.toString()
-      );
-      
-      if (!parentExists) {
+  // Combo items whose parent left the cart, or whose offer ended, lose their link.
+  if (priced.revokedItemIds.length > 0) {
+    await Cart.updateMany(
+      { _id: { $in: priced.revokedItemIds } },
+      { $unset: { linkedVia: 1 } }
+    );
+    for (const item of priced.cartItems) {
+      if (priced.revokedItemIds.some((id) => String(id) === String(item._id))) {
         item.linkedVia = undefined;
-        await item.save();
-        continue;
-      } else {
-        const offer = await LinkedOffer.findById(item.linkedVia.linkedOfferId);
-        const now = new Date();
-        const isActive = offer && offer.isActive &&
-          (!offer.startDate || offer.startDate <= now) &&
-          (!offer.endDate || offer.endDate >= now);
-        // revoking offer if inactive
-        if (!isActive) {
-          item.linkedVia = undefined;
-          await item.save();
-        } else {
-          if (offer.discountType === "percentage") {
-            const discount = finalPrice * (offer.discountValue / 100);
-            finalPrice -= discount;
-            totalComboDiscount += discount * item.quantity;
-          }
-          if (offer.discountType === "flat") {
-            finalPrice -= offer.discountValue;
-            totalComboDiscount += offer.discountValue * item.quantity;
-          }
-        }
       }
     }
-    // subtotal += finalPrice * item.quantity;
   }
 
-  const grandTotal = totalMRP - totalComboDiscount - totalMRPDiscount;
-
   return res.status(200).json({
-    cart: cartItems,
-    // subtotal,
-    totalMRP,
-    totalComboDiscount,
-    totalMRPDiscount,
-    grandTotal
+    cart: priced.cartItems,
+    totalMRP: priced.totalMRP,
+    totalComboDiscount: priced.totalComboDiscount,
+    totalMRPDiscount: priced.totalMRPDiscount,
+    grandTotal: priced.grandTotal,
   });
 })
 

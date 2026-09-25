@@ -22,6 +22,7 @@ const createBlog = asyncHandler(async (req, res) => {
   // Remove HTML tags from title
   const cleanTitle = heading
     .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
     .trim();
 
   // Generate SEO-friendly slug

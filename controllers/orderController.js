@@ -18,6 +18,7 @@ const axios = require('axios')
 const dayjs = require("dayjs");
 const escapeRegex = require("../utils/escapeRegex");
 const { isValidSignature, fetchRazorpayOrder, checkRazorpayOrder } = require("../services/razorpay");
+const { buildOrderQuote, QuoteError } = require("../services/orderQuote");
 const { createSingleParcel } = require('../controllers/checkSlab.js')
 
 // const emailTemplate = require("../document/email");
@@ -1039,52 +1040,67 @@ const mapStatus = require("../utils/mapDeliveryStatus.js");
 
 
 const createBatchOrders = asyncHandler(async (req, res) => {
+  const {
+    shippingAddress,
+    paymentMethod,
+    courierId,
+    courierName,
+    estimated_delivery_days,
+    notes,
+    couponCode,
+    code,
+    totalPrice: clientTotal,
+  } = req.body;
+
+  const userId = req.user.id;
+
+  if (!shippingAddress || typeof shippingAddress !== "object") {
+    res.status(400);
+    throw new Error("Shipping address is required");
+  }
+
+  // Items and every price come from the user's cart and the store's own rules, never from the request.
+  let quote;
+  try {
+    quote = await buildOrderQuote({
+      userId,
+      paymentMethod,
+      couponCode: couponCode || code,
+    });
+  } catch (err) {
+    if (err instanceof QuoteError) {
+      res.status(err.status);
+    }
+    throw err;
+  }
+
+  // The customer saw a lower price than we can honour (an offer ended, a price changed): ask them to
+  // review rather than silently charging more. Anything at or above the server total is safe to accept.
+  const shown = Number(clientTotal);
+  if (Number.isFinite(shown) && shown < quote.total - 1) {
+    return res.status(409).json({
+      message: "Prices have changed since you last viewed your cart. Please review and try again.",
+      serverTotal: quote.total,
+    });
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const {
-      orderItems,
-      shippingAddress,
-      paymentMethod,
-      invoiceId,
-      shippingPrice,
-      courierId,
-      paidAt,
-      paymentResult,
-      deliveryStatus,
-      itemsPrice,
-      totalPrice,
-      deliveredAt,
-      notes,
-      code,
-      courierName,
-      estimated_delivery_days,
-      discount = 0,
-      freeDelivery
-    } = req.body;
-
-    const userId = req.user.id;
-
-    if (!orderItems || orderItems.length === 0) {
-      res.status(400);
-      throw new Error("No order items");
-    }
-
+    const { orderItems } = quote;
     const now = new Date();
 
     for (const item of orderItems) {
-      const qty = item.qty || 0;
       const inventory = await Inventory.findOne({ product: item.product }, null, { session });
       if (!inventory) throw new Error(`Product not found: ${item.name}`);
-      if (inventory.quantity < qty) throw new Error(`Insufficient stock: ${item.name}`);
+      if (inventory.quantity < item.qty) throw new Error(`Insufficient stock: ${item.name}`);
     }
 
     const flashQtyMap = {};
     for (const item of orderItems) {
       if (!item.flashId) continue;
-      const qty = item.qty || 0;
-      flashQtyMap[item.flashId] = (flashQtyMap[item.flashId] || 0) + qty;
+      flashQtyMap[item.flashId] = (flashQtyMap[item.flashId] || 0) + item.qty;
     }
 
     for (const [flashId, totalQty] of Object.entries(flashQtyMap)) {
@@ -1108,35 +1124,29 @@ const createBatchOrders = asyncHandler(async (req, res) => {
           orderItems,
           user: userId,
           shippingAddress,
-          paymentResult,
           paymentMethod,
-          itemsPrice,
-          deliveryStatus,
-          totalPrice,
+          itemsPrice: quote.itemsPrice,
+          totalPrice: quote.total,
+          shippingPrice: quote.deliveryFee,
+          discount: quote.couponDiscount,
+          code: quote.coupon ? quote.coupon.name : undefined,
+          freeDelivery: quote.freeDelivery,
           notes,
-          invoiceId,
-          shippingPrice: shippingPrice,
           courierId,
           courierName,
+          estimated_delivery_days,
           totalWeight: parcel.totalWeight,
           totalWidth: parcel.totalWidth,
           totalHeight: parcel.totalHeight,
           totalLength: parcel.totalLength,
-          paidAt,
-          deliveredAt,
           isPaid: false,
-          discount,
-          code,
-          freeDelivery,
-          estimated_delivery_days
-        }
+        },
       ],
       { session }
     );
 
     for (const item of orderItems) {
-      const qty = item.qty || 0;
-      await Inventory.updateOne({ product: item.product }, { $inc: { quantity: -qty } }, { session });
+      await Inventory.updateOne({ product: item.product }, { $inc: { quantity: -item.qty } }, { session });
     }
 
     for (const [flashId, qty] of Object.entries(flashQtyMap)) {
@@ -1147,94 +1157,58 @@ const createBatchOrders = asyncHandler(async (req, res) => {
       );
     }
 
-    if (code) {
-      const coupon = await Coupon.findOne({ code }, null, { session });
-      if (coupon) {
-        coupon.usedBy.push({ user: userId });
-        await coupon.save({ session });
-      }
+    if (quote.coupon) {
+      // Conditional update so two simultaneous orders can't both spend the last use or reuse a coupon.
+      const used = await Coupon.findOneAndUpdate(
+        { _id: quote.coupon._id, count: { $lt: quote.coupon.limit }, "usedBy.user": { $ne: userId } },
+        { $inc: { count: 1 }, $push: { usedBy: { user: userId } } },
+        { session, new: true }
+      );
+      if (!used) throw new Error("Coupon is no longer available");
     }
-
 
     await session.commitTransaction();
     session.endSession();
-    console.log("order", order);
+
     if (paymentMethod === "COD") {
-      console.log('COD Ship is running')
-      order.forEach(async (o) => {
-        const user = await User.findOne({ _id: o.user })
-        let userName = "Customer"
-        if (user && user.firstName && user.lastName) {
-          userName = `${user.firstName} ${user.lastName}`
-        } else if (user && user.firstName) {
-          userName = `${user.firstName}`
-        } else if (user.email) {
-          userName = user.email
-        } else {
-          userName = "Customer"
+      const user = await User.findById(userId);
+      const userName =
+        user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
+          : user?.firstName || user?.email || "Customer";
+
+      for (const o of order) {
+        try {
+          sendOrderConfirmationEmail({
+            userName,
+            email: o.shippingAddress?.email,
+            orderItems: o.orderItems,
+            orderId: o._id,
+            subtotal: o.itemsPrice,
+            discount: o.discount,
+            tax: 5,
+            shipping: o.shippingPrice,
+            totalPrice: o.totalPrice,
+            shippingAddress: o.shippingAddress,
+            billingAddress: o.shippingAddress,
+            visualId: o.visualId || o._id,
+          });
+        } catch (err) {
+          console.error("Order confirmation email failed:", err);
         }
-
-        sendOrderConfirmationEmail({
-          userName: userName,
-          email: o.shippingAddress?.email,
-          orderItems: o.orderItems,
-          orderId: o._id,
-          subtotal: o.itemsPrice,
-          discount: o.discount,
-          tax: 5,
-          shipping: o.shippingPrice,
-          totalPrice: o.totalPrice,
-          shippingAddress: o.shippingAddress,
-          billingAddress: o.shippingAddress,
-          visualId: o.visualId || o._id
-        })
-
-      })
-      order.forEach(o => createShiprocketShipmentForOrder(o._id));
+        createShiprocketShipmentForOrder(o._id);
+      }
     }
-
-    // await Promise.all(
-    //   order.map(async (o) => {
-    //     const user = await User.findById(o.user);
-
-    //     let userName = "Customer";
-
-    //     if (user?.firstName && user?.lastName) {
-    //       userName = `${user.firstName} ${user.lastName}`;
-    //     } else if (user?.firstName) {
-    //       userName = user.firstName;
-    //     } else if (user?.email) {
-    //       userName = user.email;
-    //     }
-
-    //     await sendOrderConfirmationEmail({
-    //       userName,
-    //       email: o.shippingAddress?.email,
-    //       orderItems: o.orderItems,
-    //       orderId: o._id,
-    //       subtotal: o.itemsPrice,
-    //       discount: o.discount,
-    //       tax: 5,
-    //       shipping: o.shippingPrice,
-    //       totalPrice: o.totalPrice,
-    //       shippingAddress: o.shippingAddress,
-    //       billingAddress: o.shippingAddress,
-    //       visualId: o.visualId || o._id
-    //     });
-
-    //     await createShiprocketShipmentForOrder(o._id);
-    //   })
-    // );
 
     res.status(201).json({
       message: "Orders created successfully",
-      totalOrders: 1,
-      orders: order
+      totalOrders: order.length,
+      orders: order,
     });
-
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
+    if (error.name === "ValidationError") res.status(400);
     throw error;
   }
 });
@@ -1959,10 +1933,40 @@ const getOrderFilter = asyncHandler(async (req, res) => {
 });
 
 const payment = asyncHandler(async (req, res) => {
-  const total = Number(req.query.total);
+  const orderIds = []
+    .concat(req.query.orderIds || [])
+    .flatMap((v) => String(v).split(","))
+    .map((v) => v.trim())
+    .filter(Boolean);
 
-  if (isNaN(total) || total <= 0) {
-    return res.status(400).json({ message: "Invalid amount", });
+  if (
+    orderIds.length === 0 ||
+    orderIds.length > 50 ||
+    !orderIds.every((id) => mongoose.Types.ObjectId.isValid(id))
+  ) {
+    return res.status(400).json({ message: "orderIds are required" });
+  }
+
+  const orders = await Order.find({ _id: { $in: orderIds } });
+
+  if (orders.length !== orderIds.length) {
+    return res.status(404).json({ message: "One or more orders not found" });
+  }
+
+  for (const order of orders) {
+    if (!order.user || order.user.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to pay for one or more of these orders" });
+    }
+    if (order.paymentMethod !== "PREPAID" || order.paymentStatus !== "pending") {
+      return res.status(400).json({ message: "One or more orders are not awaiting online payment" });
+    }
+  }
+
+  // The charge is the saved (server-computed) order total, in whole rupees like the checkout shows.
+  const amountRupees = Math.round(orders.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0));
+
+  if (!(amountRupees > 0)) {
+    return res.status(400).json({ message: "Invalid amount" });
   }
 
   const instance = new Razorpay({
@@ -1972,7 +1976,7 @@ const payment = asyncHandler(async (req, res) => {
 
   // notes.userId is what verify-order later checks the payment against
   const result = await instance.orders.create({
-    amount: total * 100,
+    amount: amountRupees * 100,
     currency: "INR",
     receipt: `rcpt_${req.user.id}_${Date.now()}`.slice(0, 40),
     notes: {

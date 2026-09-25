@@ -1350,44 +1350,58 @@ const getProductsByGroupId = asyncHandler(async (req, res) => {
   res.send({ products: productsWithRatings });
 });
 
+const ADMIN_TYPES = ["Admin", "admin", "finance", "seo", "print"];
+
 const createProductReview = asyncHandler(async (req, res) => {
-  const { rating, comment, userId, productId, image } = req.body;
-  // console.log("image", image)
+  const { rating, comment, productId, image } = req.body;
+
+  // Customers always review as themselves; only admins may post on behalf of a user.
+  const userId = ADMIN_TYPES.includes(req.user.type) ? req.body.userId : req.user.id;
+
+  const numericRating = Number(rating);
+  if (!productId || !userId || !(numericRating >= 1 && numericRating <= 5)) {
+    res.status(400);
+    throw new Error("productId, userId and a rating between 1 and 5 are required");
+  }
 
   const product = await Product.findById(productId);
-  const user = await User.findById(userId);
-
-  if (product) {
-    const alreadyReviewed = product.reviews.find(
-      (r) => r.user.toString() === user._id.toString(),
-    );
-
-    if (alreadyReviewed) {
-      res.status(400);
-      throw new Error("Product already reviewed");
-    }
-
-    const review = {
-      name: user.firstName + " " + user.lastName || "Anonymous",
-      rating: Number(rating),
-      comment,
-      image,
-      user: userId,
-    };
-    // console.log("review", review)
-
-    product.reviews.push(review);
-
-    product.rating =
-      product.reviews.reduce((acc, item) => item.rating + acc, 0) /
-      product.reviews.length;
-
-    await product.save();
-    res.status(201).json({ message: "Review added", review });
-  } else {
+  if (!product) {
     res.status(404);
     throw new Error("Product not found");
   }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  const alreadyReviewed = product.reviews.find(
+    (r) => r.user.toString() === user._id.toString(),
+  );
+  if (alreadyReviewed) {
+    res.status(400);
+    throw new Error("Product already reviewed");
+  }
+
+  const displayName =
+    [user.firstName, user.lastName].filter(Boolean).join(" ") || "Anonymous";
+
+  const review = {
+    name: displayName,
+    rating: numericRating,
+    comment,
+    image,
+    user: user._id,
+  };
+
+  product.reviews.push(review);
+  product.rating =
+    product.reviews.reduce((acc, item) => item.rating + acc, 0) /
+    product.reviews.length;
+
+  await product.save();
+  res.status(201).json({ message: "Review added", review });
 });
 
 const getRelatedProductsByConcerns = asyncHandler(async (req, res) => {

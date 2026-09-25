@@ -42,6 +42,9 @@ const adminRegistration = asyncHandler(async (req, res) => {
 
 const adminLogin = asyncHandler(async (req, res) => {
     const { email, password } = req.body
+    if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+        return res.status(400).send({ message: "Email and password are required" })
+    }
     if (email && password) {
         let admin = await Admin.findOne({ email })
         if (admin && (await admin.isPasswordCorrect(password))) {
