@@ -12,7 +12,7 @@ const {
 
 const router = express.Router();
 
-router.post("/create", isAdmin, createBlog);
+router.post("/create", createBlog);
 router.post("/update", isAdmin, updateBlog);
 router.get("/get-all-blogs", getBlogs);
 router.delete("/delete", isAdmin, deleteBlog);
