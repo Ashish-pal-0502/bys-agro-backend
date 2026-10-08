@@ -105,6 +105,18 @@ const orderSchema = mongoose.Schema(
     discount: {
       type: Number
     },
+        extraDiscount: {
+      type: Number,
+      default: 0,
+    },
+    extraDiscountAmount: {
+      type: Number,
+      default: 0,
+    },
+    codHandlingCharge: {
+      type: Number,
+      default: 0,
+    },
     code: {
       type: String
     },

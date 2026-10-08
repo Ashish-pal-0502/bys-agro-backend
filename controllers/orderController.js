@@ -1050,6 +1050,8 @@ const createBatchOrders = asyncHandler(async (req, res) => {
     couponCode,
     code,
     totalPrice: clientTotal,
+    extraDiscount,        
+  codHandlingCharge, 
   } = req.body;
 
   const userId = req.user.id;
@@ -1118,6 +1120,12 @@ const createBatchOrders = asyncHandler(async (req, res) => {
 
     const parcel = createSingleParcel(orderItems);
 
+    const extraDiscountPercent = Number(extraDiscount) || 0;
+const extraDiscountAmount =
+  paymentMethod === "PREPAID" && extraDiscountPercent > 0
+    ? (quote.itemsPrice * extraDiscountPercent) / 100
+    : 0;
+
     const order = await Order.create(
       [
         {
@@ -1129,6 +1137,9 @@ const createBatchOrders = asyncHandler(async (req, res) => {
           totalPrice: quote.total,
           shippingPrice: quote.deliveryFee,
           discount: quote.couponDiscount,
+          extraDiscount: extraDiscountPercent,
+      extraDiscountAmount,
+      codHandlingCharge: Number(codHandlingCharge) || 0,
           code: quote.coupon ? quote.coupon.name : undefined,
           freeDelivery: quote.freeDelivery,
           notes,
@@ -1513,7 +1524,7 @@ const getOrderById = asyncHandler(async (req, res) => {
     "user",
     "name email"
   )
-    .populate("orderItems.product", "-_id groupId");
+    .populate("orderItems.product", "_id groupId");
 
   if (!order) {
     res.status(404);
