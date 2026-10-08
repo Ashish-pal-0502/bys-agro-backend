@@ -133,6 +133,12 @@ jobs:
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
 
           # ========================================================
+          # Google OAuth
+          # ========================================================
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+
+
+          # ========================================================
           # User / SMTP Email
           # ========================================================
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
@@ -228,7 +234,8 @@ jobs:
             WHATSAPP_PHONE_NUMBER_ID,
             FIREBASE_PROJECT_ID,
             FIREBASE_CLIENT_EMAIL,
-            FIREBASE_PRIVATE_KEY
+            FIREBASE_PRIVATE_KEY,
+            GOOGLE_CLIENT_ID
 
 
           # ========================================================
@@ -318,6 +325,13 @@ jobs:
               sudo tee -a .env > /dev/null
 
             echo "FIREBASE_PRIVATE_KEY=$FIREBASE_PRIVATE_KEY" | \
+              sudo tee -a .env > /dev/null
+
+            # ======================================================
+            # Google OAuth
+            # ======================================================
+
+            echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" | \
               sudo tee -a .env > /dev/null
 
 

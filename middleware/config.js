@@ -36,6 +36,8 @@ const whitelist = ['http://localhost:5000', 'http://localhost:5173', 'http://loc
   'https://main.dt06z443eijgj.amplifyapp.com',
   'https://bysagro.in',
   'https://www.bysagro.in',
+  'https://bysagro.com',
+  'https://www.bysagro.com',
 
   
 ]
