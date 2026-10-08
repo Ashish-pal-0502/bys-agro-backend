@@ -50,6 +50,8 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser()) 
 
+//check 
+
 // Access log without query strings: search URLs can carry emails and phone numbers.
 morgan.token('safe-path', (req) => req.originalUrl.split('?')[0])
 app.use(morgan(':remote-addr :method :safe-path :status :res[content-length] - :response-time ms'))

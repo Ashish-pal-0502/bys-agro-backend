@@ -416,7 +416,7 @@ const sendOrderConfirmationEmail = asyncHandler(async ({
                 <tr>
                   <td style="font-weight:bold;padding-top:8px;">Total</td>
                   <td align="right" style="font-weight:bold;padding-top:8px;">
-                    ₹ ${totalPrice}
+                     ₹ ${Number(totalPrice).toFixed(2)}
                   </td>
                 </tr>
               </table>
