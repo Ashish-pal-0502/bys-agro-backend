@@ -194,7 +194,7 @@ function getRecommendedCourier(couriers, recommendedId) {
 async function checkServiceability(req, res) {
   try {
     const {
-      pickupPincode = "226003",
+      pickupPincode = "226010",
       deliveryPincode,
       weight,
       length,
@@ -390,7 +390,7 @@ function getRecommended(couriers, recommendedId) {
 async function calculateShippingCost(req, res) {
   try {
     const {
-      pickupPincode = "226003",
+      pickupPincode = "226010",
       deliveryPincode,
       weight,
       length,
@@ -594,7 +594,7 @@ const calculateShippingForOrder = asyncHandler(async (req, res) => {
   try {
     const {
       orderItems,
-      pickupPincode = "226003",
+      pickupPincode = "226010",
       deliveryPincode,
       paymentMethod
     } = req.body;
@@ -720,7 +720,7 @@ async function createWarehouse(req, res) {
   try {
 
     const token = await getShiprocketToken();
-    console.log('token', token)
+    // console.log('token', token)
     const response = await axios.post(
       "https://apiv2.shiprocket.in/v1/external/settings/company/addpickup",
       req.body,
@@ -835,7 +835,7 @@ async function createShiprocketShipment(orderId) {
   const createOrderPayload = {
     order_id: order._id.toString(),
     order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
-    pickup_location: "Ardvera Naturals LLP ",
+    pickup_location: "work ",
     billing_customer_name: order.shippingAddress.address,
     billing_last_name: "",
     billing_address: order.shippingAddress.address,
@@ -903,7 +903,7 @@ async function createShiprocketOrderTest(req, res) {
     const orderPayload = {
       order_id: "ORD_" + Date.now(),
       order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
-      pickup_location: "Ardvera Naturals LLP ",
+      pickup_location: "work",
 
       billing_customer_name: "Test",
       billing_last_name: "User",
@@ -1151,6 +1151,8 @@ async function generateAWB(req, res) {
 // }
 
 async function createShiprocketShipmentForOrder(orderId) {
+
+  // console.log("order id in shiprocket", orderId)
   try {
     const order = await Order.findById(orderId);
     const user = await User.findById(order.user);
@@ -1177,8 +1179,8 @@ async function createShiprocketShipmentForOrder(orderId) {
     const createOrderPayload = {
       order_id: order._id.toString(),
       order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
-      pickup_location: "Ardvera Naturals LLP",
-      pickup_postcode: "226003",
+      pickup_location: "work",
+      pickup_postcode: "226010",
 
       billing_customer_name: userName,
       billing_last_name: "",
@@ -1432,7 +1434,7 @@ const cancelShiprocketAWBs = async (req, res) => {
 const cancelShipmentByOrderId = async (req, res) => {
   try {
     const { orderId } = req.body;
-    // console.log("orderId", orderId)
+    // console.log("cancel orderId", orderId)
     if (!orderId) {
       return res.status(400).json({
         success: false,
@@ -1750,21 +1752,21 @@ const trackShipmentByOrderId = async (req, res) => {
 // };
 
 const requestBulkPickup = async () => {
-  console.log('running bulk pickup')
+  // console.log('running bulk pickup')
   const orders = await Order.find({
     "shipment.pickupRequested": false,
     "shipment.shipmentId": { $exists: true }
   }).sort({ createdAt: -1 })
 
-  console.log('orders', orders[0])
-  console.log('orders', orders[1])
+  // console.log('orders', orders[0])
+  // console.log('orders', orders[1])
 
   if (!orders.length) return console.log("No shipments to schedule");
 
   const token = await getShiprocketToken();
   const pickupDate = dayjs().add(2, "day").format("YYYY-MM-DD");
 
-  console.log("pickupDate", pickupDate);
+  // console.log("pickupDate", pickupDate);
 
   for (let order of orders) {
     const shipmentId = order.shipment.shipmentId;
@@ -1929,7 +1931,7 @@ const requestPickupForOrder = async (req, res) => {
 
 const getServiceableCouriers = asyncHandler(async (req, res) => {
   const {
-    pickupPincode = "226003",
+    pickupPincode = "226010",
     deliveryPincode,
     shiprocketOrderId,
     paymentMethod

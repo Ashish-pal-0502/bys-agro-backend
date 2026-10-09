@@ -6,13 +6,7 @@ const { S3 } = require("@aws-sdk/client-s3");
 const { GetObjectCommand } = require('@aws-sdk/client-s3');
 const abandonedCartTemplate = require('../services/emailTemplates/abandonedCartTemplate.js');
 const axios = require('axios');
-const {
-  supportTransporter,
-  orderTransporter,
-  cartTransporter,
-  verifyTransporter,
-  helpTransporter
-} = require('./helperTransporter')
+const { sesTransporter } = require('./helperTransporter')
 
 const config = {
   region: process.env.AWS_BUCKET_REGION,
@@ -61,8 +55,8 @@ const s3 = new S3Client(config);
 
 const sendResetEmail = asyncHandler(async (email, otp) => {
   try {
-    const info = await supportTransporter.sendMail({
-      from: `Motherland Pure ${process.env.SUPPORT_EMAIL}`,
+    const info = await sesTransporter.sendMail({
+      from: `BYS Agro ${process.env.SUPPORT_EMAIL}`,
       to: email,
       subject: `Your Temporary Password`,
       subject: `Your One-Time Password (OTP) for Login`,
@@ -82,9 +76,9 @@ const sendResetEmail = asyncHandler(async (email, otp) => {
     We’re here to assist if you have any questions or need help.
     
     Warm Regards,  
-    Motherland Pure   
-    www.motherlandpure.com  
-    support@motherlandpure.com  
+    BYS Agro   
+    www.bysagro.in  
+    support@bysagro.in  
     
         `,
     });
@@ -98,10 +92,10 @@ const sendResetEmail = asyncHandler(async (email, otp) => {
 
 const sendVerificationEmail = asyncHandler(async (otp, email) => {
   try {
-    const info = await supportTransporter.sendMail({
-      from: `Motherland Pure ${process.env.SUPPORT_EMAIL}`,
+    const info = await sesTransporter.sendMail({
+      from: `BYS Agro ${process.env.SUPPORT_EMAIL}`,
       to: email,
-      subject: `Verify Your Email Address - Motherland Pure`,
+      subject: `Verify Your Email Address - BYS Agro`,
       text: `
 Hello,
 
@@ -119,9 +113,9 @@ If you didn’t sign up for Motherland, please disregard this email or contact u
 We’re here to assist if you have any questions or need help.
 
 Warm Regards,  
-Team MotherlandPure.com  
-www.motherlandpure.com  
-support@motherlandpure.com  
+Team bysagro.in  
+www.bysagro.in  
+support@bysagro.in  
 
         `,
     });
@@ -135,8 +129,8 @@ support@motherlandpure.com
 
 const sendApprovalEmail = asyncHandler(async (email, name) => {
   try {
-    await supportTransporter.sendMail({
-      from: `Motherland Pure ${process.env.SUPPORT_EMAIL}`,
+    await sesTransporter.sendMail({
+      from: `BYS Agro ${process.env.SUPPORT_EMAIL}`,
       to: email,
       subject: `Your Profile Has Been Approved`,
       text: `
@@ -148,9 +142,9 @@ You can now log in and start using your account.
 We’re excited to have you onboard as part of Doera!
 
 Warm Regards,  
-Motherland Pure  
-www.motherlandpure.com  
-support@motherlandpure.com  
+BYS Agro  
+www.bysagro.in  
+support@bysagro.in  
 
     `,
     });
@@ -163,8 +157,8 @@ support@motherlandpure.com
 
 const sendRejectionEmail = asyncHandler(async (email, name, reason) => {
   try {
-    await supportTransporter.sendMail({
-      from: `Motherland Pure ${process.env.SUPPORT_EMAIL}`,
+    await sesTransporter.sendMail({
+      from: `BYS Agro ${process.env.SUPPORT_EMAIL}`,
       to: email,
       subject: `Your Profile Has Been Rejected`,
       text: `
@@ -176,9 +170,9 @@ Please contact our support team and make the required changes before re-submitti
 We’re here to help you through the process.
 
 Warm Regards,  
-Motherland Pure  
-www.motherlandpure.com  
-support@motherlandpure.com  
+BYS Agro  
+www.bysagro.in  
+support@bysagro.in  
 
     `,
     });
@@ -198,8 +192,8 @@ const sendAbandonedCartEmail = asyncHandler(async (email, firstName, products) =
     const html = abandonedCartTemplate(nameToUse, products);
     console.log(email, nameToUse);
     console.log("process.env.CART_EMAIL", process.env.CART_EMAIL, "process.env.CART_PASS", process.env.CART_PASS)
-    const info = await cartTransporter.sendMail({
-      from: `Motherland Pure <${process.env.CART_EMAIL}>`,
+    const info = await sesTransporter.sendMail({
+      from: `BYS Agro <${process.env.CART_EMAIL}>`,
       to: email,
       subject: `You left something in your cart 🛒`,
       text: `Hi ${nameToUse}, you left items in your cart. Complete your order now.`,
@@ -217,8 +211,8 @@ const sendAbandonedCartEmail = asyncHandler(async (email, firstName, products) =
 const sendBulkEmail = asyncHandler(
   async ({ subject, html, emails }) => {
     try {
-      const info = await supportTransporter.sendMail({
-        from: `Motherland Pure <${process.env.SUPPORT_EMAIL}>`,
+      const info = await sesTransporter.sendMail({
+        from: `BYS Agro <${process.env.SUPPORT_EMAIL}>`,
         to: emails,
         subject,
         html,
@@ -256,14 +250,14 @@ const sendBulkEmail = asyncHandler(
 //           totalPrice
 //       })
 
-//     const info = await orderTransporter.sendMail({
-//       from: `Motherland Pure ${process.env.ORDER_EMAIL}`,
+//     const info = await sesTransporter.sendMail({
+//       from: `BYS Agro ${process.env.ORDER_EMAIL}`,
 //       to: email,
-//       subject: "Order Confirmation - Motherland Pure",
+//       subject: "Order Confirmation - BYS Agro",
 //       text: `
 // Hello ${userName},
 
-// Thank you for your order with Motherland Pure! 🌿  
+// Thank you for your order with BYS Agro! 🌿  
 // Your order has been successfully placed.
 
 // Order Details:
@@ -282,9 +276,9 @@ const sendBulkEmail = asyncHandler(
 // If you have any questions or need help, feel free to reach out to us.
 
 // Warm Regards,  
-// Team Motherland Pure  
-// www.motherlandpure.com  
-// support@motherlandpure.com
+// Team BYS Agro  
+// www.bysagro.in  
+// support@bysagro.in
 //       `,
 //     });
 //     console.log('info', info)
@@ -342,7 +336,7 @@ const sendOrderConfirmationEmail = asyncHandler(async ({
           <!-- Header -->
           <tr>
             <td style="font-size:20px;font-weight:bold;">
-              Motherland Pure
+              BYS Agro
             </td>
             <td align="right" style="color:#666;">
               ORDER #${visualId || orderId}
@@ -365,12 +359,12 @@ const sendOrderConfirmationEmail = asyncHandler(async ({
           <!-- Buttons -->
           <tr>
             <td colspan="2" style="padding:20px 0;">
-              <a href="https://motherlandpure.com/orders/${orderId}"
+              <a href="https://bysagro.in/orders/${orderId}"
                  style="background:#007bff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:4px;">
                  View your order
               </a>
               &nbsp;&nbsp;
-              <a href="https://motherlandpure.com"
+              <a href="https://bysagro.in"
                  style="color:#007bff;text-decoration:none;">
                  Visit our store
               </a>
@@ -414,11 +408,11 @@ const sendOrderConfirmationEmail = asyncHandler(async ({
                 </tr>
 
                 <tr>
-                  <td style="font-weight:bold;padding-top:8px;">Total</td>
-                  <td align="right" style="font-weight:bold;padding-top:8px;">
-                     ₹ ${Number(totalPrice).toFixed(2)}
-                  </td>
-                </tr>
+  <td style="font-weight:bold;padding-top:8px;">Total</td>
+  <td align="right" style="font-weight:bold;padding-top:8px;white-space:nowrap;">
+    &#8377; ${Number(totalPrice).toFixed(2)}
+  </td>
+</tr>
               </table>
             </td>
           </tr>
@@ -459,8 +453,8 @@ const sendOrderConfirmationEmail = asyncHandler(async ({
           <!-- Footer -->
           <tr>
             <td colspan="2" align="center" style="color:#999;font-size:13px;">
-              © ${new Date().getFullYear()} Motherland Pure<br/>
-              support@motherlandpure.com
+              © ${new Date().getFullYear()} BYS Agro<br/>
+              support@bysagro.in
             </td>
           </tr>
 
@@ -472,10 +466,10 @@ const sendOrderConfirmationEmail = asyncHandler(async ({
 </html>
     `;
 
-    await orderTransporter.sendMail({
-      from: `Motherland Pure <${process.env.ORDER_EMAIL}>`,
+    await sesTransporter.sendMail({
+      from: `BYS Agro <${process.env.ORDER_EMAIL}>`,
       to: email,
-      subject: "Order Confirmation - Motherland Pure",
+      subject: "Order Confirmation - BYS Agro",
       html
     });
 

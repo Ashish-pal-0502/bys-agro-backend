@@ -137,6 +137,12 @@ jobs:
           # ========================================================
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
 
+          # ========================================================
+          # AWS SES SMTP
+          # ========================================================
+          SES_SMTP_USERNAME: ${{ secrets.SES_SMTP_USERNAME }}
+          SES_SMTP_PASSWORD: ${{ secrets.SES_SMTP_PASSWORD }}
+
 
           # ========================================================
           # User / SMTP Email
@@ -225,6 +231,8 @@ jobs:
             SMTP_HOST,
             SMTP_PORT,
             SMTP_SECURE,
+            SES_SMTP_USERNAME,
+            SES_SMTP_PASSWORD,
             SHIPROCKET_API_EMAIL,
             SHIPROCKET_API_PASS,
             RAZOR_PAY_ID,
@@ -434,6 +442,16 @@ jobs:
               sudo tee -a .env > /dev/null
 
             echo "SMTP_SECURE=$SMTP_SECURE" | \
+              sudo tee -a .env > /dev/null
+
+            # ======================================================
+            # AWS SES SMTP
+            # ======================================================
+
+            echo "SES_SMTP_USERNAME=$SES_SMTP_USERNAME" | \
+              sudo tee -a .env > /dev/null
+
+            echo "SES_SMTP_PASSWORD=$SES_SMTP_PASSWORD" | \
               sudo tee -a .env > /dev/null
 
 

@@ -1,27 +1,16 @@
+
+
 const nodemailer = require("nodemailer");
 
-const createTransporter = (email, password) => {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
-    secure: process.env.SMTP_SECURE === "true",
-    auth: {
-      user: email,
-      pass: password,
-    },
-  });
-};
+// Amazon SES uses ONE set of SMTP credentials to send from ANY email on your verified domain.
+const sesTransporter = nodemailer.createTransport({
+  host: "email-smtp.ap-south-1.amazonaws.com", // Mumbai region
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.SES_SMTP_USERNAME, // Your ONE SES SMTP username
+    pass: process.env.SES_SMTP_PASSWORD, // Your ONE SES SMTP password
+  },
+});
 
-const supportTransporter = createTransporter(process.env.SUPPORT_EMAIL, process.env.SUPPORT_PASS);
-const orderTransporter   = createTransporter(process.env.ORDER_EMAIL, process.env.ORDER_PASS);
-const cartTransporter    = createTransporter(process.env.CART_EMAIL, process.env.CART_PASS);
-const verifyTransporter  = createTransporter(process.env.VERIFY_EMAIL, process.env.VERIFY_PASS);
-const helpTransporter    = createTransporter(process.env.HELP_EMAIL, process.env.HELP_PASS);
-
-module.exports = {
-    supportTransporter,
-    orderTransporter,
-    cartTransporter,
-    verifyTransporter,
-    helpTransporter
-}
+module.exports = { sesTransporter };
